@@ -18,7 +18,7 @@ defmodule OneAgent.Accounts.Scope do
 
   alias OneAgent.Accounts.User
 
-  defstruct user: nil
+  defstruct user: nil, agent: nil
 
   @doc """
   Creates a scope for the given user.

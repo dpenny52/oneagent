@@ -12,6 +12,11 @@ defmodule OneAgentWeb.Router do
     plug OneAgentWeb.Plugs.RateLimit, max_requests: 5, interval_ms: 60_000
   end
 
+  pipeline :webhook do
+    plug :accepts, ["json"]
+    plug OneAgentWeb.Plugs.RateLimit, max_requests: 60, interval_ms: 60_000
+  end
+
   # Public auth routes (no auth required, rate limited)
   scope "/api/auth", OneAgentWeb do
     pipe_through [:api, :rate_limited]
@@ -40,6 +45,35 @@ defmodule OneAgentWeb.Router do
     delete "/logout", UserSessionController, :delete
     get "/me", UserSessionController, :me
     put "/password", UserSessionController, :update_password
+  end
+
+  # Authenticated API routes
+  scope "/api", OneAgentWeb do
+    pipe_through [:api, :require_authenticated_user]
+
+    resources "/agents", AgentController, except: [:new, :edit] do
+      post "/start", AgentController, :start
+      post "/stop", AgentController, :stop
+      post "/invoke", AgentController, :invoke
+      get "/buckets", AgentController, :list_buckets
+      put "/buckets", AgentController, :update_buckets
+      get "/runs", AgentController, :list_runs
+      get "/runs/:id", AgentController, :show_run
+      get "/memory", AgentController, :list_memories
+      delete "/memory", AgentController, :delete_memories
+    end
+
+    resources "/credentials", CredentialController, except: [:new, :edit]
+    resources "/llm-configs", LlmConfigController, except: [:new, :edit]
+    resources "/whatsapp-channels", WhatsAppChannelController, except: [:new, :edit]
+  end
+
+  # WhatsApp webhook (unauthenticated, rate limited)
+  scope "/api/webhooks", OneAgentWeb do
+    pipe_through [:webhook]
+
+    get "/whatsapp", WhatsAppWebhookController, :verify
+    post "/whatsapp", WhatsAppWebhookController, :handle
   end
 
   # Health check

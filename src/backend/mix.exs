@@ -56,7 +56,8 @@ defmodule OneAgent.MixProject do
       {:ueberauth, "~> 0.10"},
       {:ueberauth_google, "~> 0.12"},
       {:corsica, "~> 2.1"},
-      {:hammer, "~> 6.2"}
+      {:hammer, "~> 6.2"},
+      {:cloak_ecto, "~> 1.3"}
     ]
   end
 

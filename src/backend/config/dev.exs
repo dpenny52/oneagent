@@ -64,3 +64,11 @@ config :phoenix, :plug_init_mode, :runtime
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# Cloak encryption key for development (NOT for production use)
+config :oneagent, OneAgent.Vault,
+  ciphers: [
+    default: {Cloak.Ciphers.AES.GCM,
+     tag: "AES.GCM.V1",
+     key: Base.decode64!("QmSD1PV9odxXZgMv43Xp2/7601+w+3JBQ1kHWVnyQ44=")}
+  ]

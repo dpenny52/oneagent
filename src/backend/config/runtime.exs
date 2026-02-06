@@ -19,6 +19,16 @@ if client_id = System.get_env("GOOGLE_CLIENT_ID") do
     client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
 end
 
+# Cloak encryption key (required in prod, optional in dev/test)
+if cloak_key = System.get_env("CLOAK_KEY") do
+  config :oneagent, OneAgent.Vault,
+    ciphers: [
+      default: {Cloak.Ciphers.AES.GCM,
+       tag: "AES.GCM.V1",
+       key: Base.decode64!(cloak_key)}
+    ]
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

@@ -10,10 +10,12 @@ defmodule OneAgent.Application do
     children = [
       OneAgentWeb.Telemetry,
       OneAgent.Repo,
+      OneAgent.Vault,
       {DNSCluster, query: Application.get_env(:oneagent, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: OneAgent.PubSub},
-      # Start a worker by calling: OneAgent.Worker.start_link(arg)
-      # {OneAgent.Worker, arg},
+      {Registry, keys: :unique, name: OneAgent.Runtime.AgentRegistry},
+      OneAgent.Runtime.AgentSupervisor,
+      {Task.Supervisor, name: OneAgent.WhatsApp.TaskSupervisor},
       # Start to serve requests, typically the last entry
       OneAgentWeb.Endpoint
     ]

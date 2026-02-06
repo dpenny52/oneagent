@@ -88,6 +88,10 @@ src/backend/                   # Elixir/Phoenix API-only app
         user_notifier.ex       # Email delivery functions
         scope.ex               # Caller scope struct
       accounts.ex              # Accounts context (registration, login, OAuth, tokens)
+      whatsapp/                # WhatsApp integration
+        channel.ex             # Channel schema (phone_number_id → agent mapping)
+        client.ex              # Cloud API client (HMAC verify, send/parse messages)
+      whatsapp.ex              # WhatsApp context (scoped CRUD + unscoped webhook lookups)
       repo.ex                  # Ecto Repo
       mailer.ex                # Swoosh mailer
     oneagent_web/
@@ -100,8 +104,12 @@ src/backend/                   # Elixir/Phoenix API-only app
         health_controller.ex              # GET /api/health
         auth_json.ex                      # JSON view for all auth responses
         fallback_controller.ex            # Centralized error rendering
+        whatsapp_webhook_controller.ex    # GET/POST /api/webhooks/whatsapp
+        whatsapp_channel_controller.ex    # CRUD /api/whatsapp-channels
+        whatsapp_channel_json.ex          # JSON view for channels
       plugs/
         rate_limit.ex          # Hammer-based rate limiting (5 req/min on auth)
+        cache_raw_body.ex      # Caches raw body for HMAC signature verification
       user_auth.ex             # Bearer token auth plug
       router.ex                # API routes
       endpoint.ex              # CORS (Corsica), parsers, static
@@ -168,6 +176,30 @@ See `src/backend/.env.example` for full reference:
 | POST | `/api/auth/confirm` | Bearer | No |
 | POST | `/api/auth/confirm/:token` | No | Yes |
 | GET | `/api/health` | No | No |
+| GET | `/api/webhooks/whatsapp` | No | Yes (60/min) |
+| POST | `/api/webhooks/whatsapp` | No | Yes (60/min) |
+| GET | `/api/whatsapp-channels` | Bearer | No |
+| POST | `/api/whatsapp-channels` | Bearer | No |
+| GET | `/api/whatsapp-channels/:id` | Bearer | No |
+| PUT | `/api/whatsapp-channels/:id` | Bearer | No |
+| DELETE | `/api/whatsapp-channels/:id` | Bearer | No |
+
+### WhatsApp Integration
+
+Agents can receive and reply to WhatsApp messages via Meta's Cloud API.
+
+**Flow:** WhatsApp message → Meta webhook POST → verify HMAC → find channel by phone_number_id → auto-start agent → invoke → send reply via Cloud API.
+
+**Key design decisions:**
+- Webhook returns 200 immediately; message processing is async via `Task.Supervisor`
+- One `whatsapp_channels` table maps a phone_number_id to an agent + credential
+- WhatsApp credentials (access_token + app_secret) stored encrypted in the `credentials` table with `service: "whatsapp"`, `credential_type: "custom"`
+- HMAC-SHA256 signature verification using raw body cached by `CacheRawBody` plug
+- `verify_token` is auto-generated and only returned in the create response (needed for Meta dashboard setup)
+- Agent auto-start handles stale "running" DB status after server restarts by checking the Registry
+- Responses truncated to 4096 chars (WhatsApp limit)
+
+**Setup:** Create a credential (WhatsApp access_token + app_secret), create an agent with LLM config, create a channel linking them, configure Meta's webhook dashboard with the callback URL and verify_token.
 
 ---
 

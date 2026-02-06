@@ -38,3 +38,11 @@ config :phoenix, :plug_init_mode, :runtime
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Cloak encryption key for tests (NOT for production use)
+config :oneagent, OneAgent.Vault,
+  ciphers: [
+    default: {Cloak.Ciphers.AES.GCM,
+     tag: "AES.GCM.V1",
+     key: Base.decode64!("QmSD1PV9odxXZgMv43Xp2/7601+w+3JBQ1kHWVnyQ44=")}
+  ]

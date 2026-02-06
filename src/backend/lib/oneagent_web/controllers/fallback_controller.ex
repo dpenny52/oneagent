@@ -21,4 +21,11 @@ defmodule OneAgentWeb.FallbackController do
     |> put_view(OneAgentWeb.AuthJSON)
     |> render("error.json", error: "Invalid credentials")
   end
+
+  def call(conn, {:error, message}) when is_binary(message) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> put_view(OneAgentWeb.AuthJSON)
+    |> render("error.json", error: message)
+  end
 end
