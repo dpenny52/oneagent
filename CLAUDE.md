@@ -72,6 +72,105 @@ Each page presents the same product content with a unique aesthetic:
 1. Create `src/frontend/app/{N}/page.tsx` following the conventions above
 2. Add an entry to the `designs` array in `src/frontend/app/page.tsx`
 
+---
+
+## Backend (Elixir/Phoenix API)
+
+### Project Structure
+
+```
+src/backend/                   # Elixir/Phoenix API-only app
+  lib/
+    oneagent/
+      accounts/                # Accounts context
+        user.ex                # User schema (email, password, google_uid, etc.)
+        user_token.ex          # Token schema (session, api-token, magic-link, confirm, reset)
+        user_notifier.ex       # Email delivery functions
+        scope.ex               # Caller scope struct
+      accounts.ex              # Accounts context (registration, login, OAuth, tokens)
+      repo.ex                  # Ecto Repo
+      mailer.ex                # Swoosh mailer
+    oneagent_web/
+      controllers/
+        user_registration_controller.ex   # POST /api/auth/register
+        user_session_controller.ex        # POST /api/auth/login, magic-link, logout, me
+        user_password_reset_controller.ex # POST /api/auth/forgot-password, reset-password
+        user_confirmation_controller.ex   # POST /api/auth/confirm
+        google_auth_controller.ex         # GET /api/auth/google, callback
+        health_controller.ex              # GET /api/health
+        auth_json.ex                      # JSON view for all auth responses
+        fallback_controller.ex            # Centralized error rendering
+      plugs/
+        rate_limit.ex          # Hammer-based rate limiting (5 req/min on auth)
+      user_auth.ex             # Bearer token auth plug
+      router.ex                # API routes
+      endpoint.ex              # CORS (Corsica), parsers, static
+  config/
+    config.exs                 # Base config (Hammer, Ueberauth, etc.)
+    dev.exs                    # Dev database config
+    test.exs                   # Test config
+    runtime.exs                # Runtime env vars (DATABASE_URL, SECRET_KEY_BASE, etc.)
+  priv/repo/migrations/        # Ecto migrations
+```
+
+### Tech Stack
+
+- **Elixir 1.19** / **Erlang/OTP 28**
+- **Phoenix 1.8** (API-only, no HTML/LiveView)
+- **Ecto** with **PostgreSQL** (binary UUIDs)
+- **bcrypt_elixir** for password hashing
+- **Ueberauth** + **ueberauth_google** for Google OAuth
+- **Corsica** for CORS
+- **Hammer** for rate limiting
+- **Swoosh** for email delivery
+
+### Commands
+
+Run from the `src/backend/` directory:
+
+```bash
+mix deps.get        # Install dependencies
+mix ecto.setup      # Create DB, run migrations, seed
+mix ecto.migrate    # Run pending migrations
+mix phx.server      # Start server (localhost:4000)
+mix test            # Run test suite
+```
+
+### Database Setup
+
+PostgreSQL must be running. Dev config uses `dpenny` user with no password.
+
+### Environment Variables
+
+See `src/backend/.env.example` for full reference:
+- `DATABASE_URL` — PostgreSQL connection string (prod)
+- `SECRET_KEY_BASE` — Phoenix secret (prod; generate with `mix phx.gen.secret`)
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth credentials
+- `CORS_ORIGIN` — Allowed origin (default: `http://localhost:3000`)
+- `PORT` — HTTP port (default: `4000`)
+- `PHX_HOST` — Production hostname
+
+### API Endpoints
+
+| Method | Path | Auth | Rate Limited |
+|--------|------|------|-------------|
+| POST | `/api/auth/register` | No | Yes |
+| POST | `/api/auth/login` | No | Yes |
+| POST | `/api/auth/magic-link` | No | Yes |
+| POST | `/api/auth/magic-link/verify` | No | Yes |
+| GET | `/api/auth/google` | No | No |
+| GET | `/api/auth/google/callback` | No | No |
+| DELETE | `/api/auth/logout` | Bearer | No |
+| GET | `/api/auth/me` | Bearer | No |
+| PUT | `/api/auth/password` | Bearer | No |
+| POST | `/api/auth/forgot-password` | No | Yes |
+| POST | `/api/auth/reset-password` | No | Yes |
+| POST | `/api/auth/confirm` | Bearer | No |
+| POST | `/api/auth/confirm/:token` | No | Yes |
+| GET | `/api/health` | No | No |
+
+---
+
 ## Design Philosophy
 
 The user prefers **dark, atmospheric, luxurious** aesthetics with:
