@@ -88,11 +88,31 @@ src/backend/                   # Elixir/Phoenix API-only app
         user_notifier.ex       # Email delivery functions
         scope.ex               # Caller scope struct
       accounts.ex              # Accounts context (registration, login, OAuth, tokens)
+      agents/                  # Agent domain schemas
+        agent.ex               # Agent schema (name, system_prompt, trigger_type, etc.)
+        agent_bucket.ex        # Permission bucket schema
+        agent_run.ex           # Execution run schema
+        agent_step.ex          # Run step schema (LLM calls, tool executions)
+        agent_memory.ex        # Persistent key-value memory schema
+        agent_message.ex       # Chat history message schema (role, content, sequence)
+      agents.ex                # Agents context (CRUD, buckets, runs, steps, memory, messages)
+      credentials/             # Credential domain schemas
+        credential.ex          # Encrypted credential schema (AES-256-GCM)
+        llm_config.ex          # LLM API key schema
+      credentials.ex           # Credentials context (CRUD + decryption)
+      runtime/                 # Agent runtime
+        agent_process.ex       # GenServer per agent — agentic loop with chat history
+        agent_supervisor.ex    # DynamicSupervisor for agent processes
+      runtime.ex               # Runtime public API (start, stop, invoke)
+      workers/                 # Oban background workers
+        schedule_checker.ex    # Cron worker — finds agents due to run each minute
+        scheduled_execution.ex # Per-agent scheduled run worker
       whatsapp/                # WhatsApp integration
         channel.ex             # Channel schema (phone_number_id → agent mapping)
         client.ex              # Cloud API client (HMAC verify, send/parse messages)
       whatsapp.ex              # WhatsApp context (scoped CRUD + unscoped webhook lookups)
       repo.ex                  # Ecto Repo
+      vault.ex                 # Cloak vault for AES-256-GCM encryption
       mailer.ex                # Swoosh mailer
     oneagent_web/
       controllers/
@@ -102,6 +122,12 @@ src/backend/                   # Elixir/Phoenix API-only app
         user_confirmation_controller.ex   # POST /api/auth/confirm
         google_auth_controller.ex         # GET /api/auth/google, callback
         health_controller.ex              # GET /api/health
+        agent_controller.ex               # Agent CRUD + lifecycle + buckets + runs + memory + messages
+        agent_json.ex                     # JSON views for agents, runs, buckets, messages
+        credential_controller.ex          # CRUD /api/credentials
+        credential_json.ex                # JSON view for credentials
+        llm_config_controller.ex          # CRUD /api/llm-configs
+        llm_config_json.ex                # JSON view for LLM configs
         auth_json.ex                      # JSON view for all auth responses
         fallback_controller.ex            # Centralized error rendering
         whatsapp_webhook_controller.ex    # GET/POST /api/webhooks/whatsapp
@@ -114,7 +140,7 @@ src/backend/                   # Elixir/Phoenix API-only app
       router.ex                # API routes
       endpoint.ex              # CORS (Corsica), parsers, static
   config/
-    config.exs                 # Base config (Hammer, Ueberauth, etc.)
+    config.exs                 # Base config (Hammer, Ueberauth, Oban, etc.)
     dev.exs                    # Dev database config
     test.exs                   # Test config
     runtime.exs                # Runtime env vars (DATABASE_URL, SECRET_KEY_BASE, etc.)
@@ -131,6 +157,9 @@ src/backend/                   # Elixir/Phoenix API-only app
 - **Corsica** for CORS
 - **Hammer** for rate limiting
 - **Swoosh** for email delivery
+- **Oban** for background job processing and scheduled agent execution
+- **Crontab** for cron expression parsing
+- **cloak_ecto** for AES-256-GCM field encryption
 
 ### Commands
 
@@ -175,6 +204,21 @@ See `src/backend/.env.example` for full reference:
 | POST | `/api/auth/reset-password` | No | Yes |
 | POST | `/api/auth/confirm` | Bearer | No |
 | POST | `/api/auth/confirm/:token` | No | Yes |
+| CRUD | `/api/agents` | Bearer | No |
+| POST | `/api/agents/:id/start` | Bearer | No |
+| POST | `/api/agents/:id/stop` | Bearer | No |
+| POST | `/api/agents/:id/invoke` | Bearer | No |
+| GET | `/api/agents/:id/buckets` | Bearer | No |
+| PUT | `/api/agents/:id/buckets` | Bearer | No |
+| GET | `/api/agents/:id/runs` | Bearer | No |
+| GET | `/api/agents/:id/runs/:id` | Bearer | No |
+| GET | `/api/agents/:id/memory` | Bearer | No |
+| DELETE | `/api/agents/:id/memory` | Bearer | No |
+| GET | `/api/agents/:id/messages` | Bearer | No |
+| DELETE | `/api/agents/:id/messages` | Bearer | No |
+| CRUD | `/api/credentials` | Bearer | No |
+| CRUD | `/api/llm-configs` | Bearer | No |
+| CRUD | `/api/whatsapp-channels` | Bearer | No |
 | GET | `/api/health` | No | No |
 | GET | `/api/webhooks/whatsapp` | No | Yes (60/min) |
 | POST | `/api/webhooks/whatsapp` | No | Yes (60/min) |
@@ -200,6 +244,27 @@ Agents can receive and reply to WhatsApp messages via Meta's Cloud API.
 - Responses truncated to 4096 chars (WhatsApp limit)
 
 **Setup:** Create a credential (WhatsApp access_token + app_secret), create an agent with LLM config, create a channel linking them, configure Meta's webhook dashboard with the callback URL and verify_token.
+
+### Chat History
+
+Agents persist conversation history in the `agent_messages` table. Each message has a role (`user`/`assistant`), content, and auto-incrementing sequence number.
+
+**Key design decisions:**
+- Only the user's original text and the assistant's final response are stored — intermediate tool-use turns within a run are NOT stored (they remain in `agent_steps` for audit)
+- History is loaded before each LLM call, limited by `max_history_messages` (default 20, configurable 0–200)
+- On error, the user message is still persisted so context isn't lost
+- `GET /api/agents/:id/messages` returns recent messages; `DELETE /api/agents/:id/messages` clears all
+
+### Scheduled Execution (Oban)
+
+Agents with `trigger_type: "scheduled"` and a cron expression in `trigger_config` are automatically executed on schedule.
+
+**Architecture:**
+- **Oban** handles job processing with a Cron plugin
+- **ScheduleChecker** — runs every minute, queries all running scheduled agents, filters by cron match, enqueues `ScheduledExecution` jobs
+- **ScheduledExecution** — executes a single agent run with uniqueness (60s per agent_id), guards for status/schedule/daily limit, auto-restarts process if needed after server restart
+
+**Config:** Set `trigger_type: "scheduled"` and `trigger_config: {"cron": "*/5 * * * *", "message": "Check for updates"}` on an agent, then start it.
 
 ---
 

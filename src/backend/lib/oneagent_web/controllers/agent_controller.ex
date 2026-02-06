@@ -134,6 +134,26 @@ defmodule OneAgentWeb.AgentController do
     end
   end
 
+  # ── Messages (Chat History) ────────────────────────────────
+
+  def list_messages(conn, %{"agent_id" => id}) do
+    scope = conn.assigns.current_scope
+
+    with {:ok, agent} <- Agents.get_agent(scope, id) do
+      messages = Agents.list_recent_messages(agent)
+      render(conn, :messages_list, messages: messages)
+    end
+  end
+
+  def delete_messages(conn, %{"agent_id" => id}) do
+    scope = conn.assigns.current_scope
+
+    with {:ok, agent} <- Agents.get_agent(scope, id) do
+      Agents.delete_all_messages(agent)
+      send_resp(conn, :no_content, "")
+    end
+  end
+
   defp atomize_bucket_configs(configs) when is_list(configs) do
     Enum.map(configs, fn config ->
       config

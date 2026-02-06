@@ -8,7 +8,7 @@ defmodule OneAgent.Agents do
 
   import Ecto.Query
   alias OneAgent.Repo
-  alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory}
+  alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory, AgentMessage}
 
   # ── Agents CRUD ──────────────────────────────────────────────
 
@@ -212,5 +212,49 @@ defmodule OneAgent.Agents do
   def delete_all_memories(%Agent{} = agent) do
     from(m in AgentMemory, where: m.agent_id == ^agent.id)
     |> Repo.delete_all()
+  end
+
+  # ── Messages (Chat History) ────────────────────────────────
+
+  def list_recent_messages(%Agent{} = agent, limit \\ nil) do
+    limit = limit || agent.max_history_messages
+
+    subquery =
+      from m in AgentMessage,
+        where: m.agent_id == ^agent.id,
+        order_by: [desc: m.sequence],
+        limit: ^limit
+
+    from(m in subquery(subquery), order_by: [asc: m.sequence])
+    |> Repo.all()
+  end
+
+  def create_message(%Agent{} = agent, attrs) do
+    seq = next_message_sequence(agent)
+
+    %AgentMessage{agent_id: agent.id}
+    |> AgentMessage.changeset(Map.put(attrs, :sequence, seq))
+    |> Repo.insert()
+  end
+
+  def delete_all_messages(%Agent{} = agent) do
+    from(m in AgentMessage, where: m.agent_id == ^agent.id)
+    |> Repo.delete_all()
+  end
+
+  defp next_message_sequence(%Agent{} = agent) do
+    case Repo.one(from m in AgentMessage, where: m.agent_id == ^agent.id, select: max(m.sequence)) do
+      nil -> 1
+      max_seq -> max_seq + 1
+    end
+  end
+
+  # ── Scheduled Agents (unscoped) ────────────────────────────
+
+  def list_scheduled_agents do
+    from(a in Agent,
+      where: a.trigger_type == "scheduled" and a.status == "running"
+    )
+    |> Repo.all()
   end
 end

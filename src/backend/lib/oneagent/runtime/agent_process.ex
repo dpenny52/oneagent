@@ -68,10 +68,12 @@ defmodule OneAgent.Runtime.AgentProcess do
     {:ok, run} = Agents.create_run(agent, %{trigger: trigger})
     {:ok, run} = Agents.start_run(run)
 
-    # Build initial messages
-    messages = [
-      %{"role" => "user", "content" => message}
-    ]
+    # Load conversation history and append current user message
+    history = Agents.list_recent_messages(agent)
+    history_messages = Enum.map(history, fn msg ->
+      %{"role" => msg.role, "content" => msg.content}
+    end)
+    messages = history_messages ++ [%{"role" => "user", "content" => message}]
 
     # Get tool definitions filtered by agent's buckets
     tool_defs = Tools.tool_definitions_for_agent(agent)
@@ -83,9 +85,14 @@ defmodule OneAgent.Runtime.AgentProcess do
     # Run the loop
     case agentic_loop(state, run, messages, tool_defs, system, 0) do
       {:ok, final_text, run} ->
+        # Persist user message and assistant response to chat history
+        Agents.create_message(agent, %{role: "user", content: message, run_id: run.id})
+        Agents.create_message(agent, %{role: "assistant", content: final_text, run_id: run.id})
         {:ok, %{run_id: run.id, response: final_text}}
 
       {:error, reason, run} ->
+        # Persist user message even on error so context isn't lost
+        Agents.create_message(agent, %{role: "user", content: message, run_id: run.id})
         Agents.fail_run(run, reason)
         {:error, reason}
     end

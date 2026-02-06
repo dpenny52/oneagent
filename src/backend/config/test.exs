@@ -39,6 +39,9 @@ config :phoenix, :plug_init_mode, :runtime
 config :phoenix,
   sort_verified_routes_query_params: true
 
+# Oban: inline mode for tests
+config :oneagent, Oban, testing: :inline
+
 # Cloak encryption key for tests (NOT for production use)
 config :oneagent, OneAgent.Vault,
   ciphers: [

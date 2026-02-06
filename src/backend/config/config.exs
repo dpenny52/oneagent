@@ -70,6 +70,16 @@ config :oneagent, OneAgent.Vault,
     default: {Cloak.Ciphers.AES.GCM, tag: "AES.GCM.V1", key: ""}
   ]
 
+# Oban job processing
+config :oneagent, Oban,
+  repo: OneAgent.Repo,
+  queues: [default: 10, scheduled: 5],
+  plugins: [
+    {Oban.Plugins.Cron, crontab: [
+      {"* * * * *", OneAgent.Workers.ScheduleChecker}
+    ]}
+  ]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

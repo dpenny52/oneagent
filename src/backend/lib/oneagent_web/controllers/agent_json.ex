@@ -1,5 +1,5 @@
 defmodule OneAgentWeb.AgentJSON do
-  alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory}
+  alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory, AgentMessage}
 
   def render("index.json", %{agents: agents}) do
     %{data: Enum.map(agents, &agent_data/1)}
@@ -29,6 +29,10 @@ defmodule OneAgentWeb.AgentJSON do
     %{data: Enum.map(memories, &memory_data/1)}
   end
 
+  def render("messages_list.json", %{messages: messages}) do
+    %{data: Enum.map(messages, &message_data/1)}
+  end
+
   defp agent_data(%Agent{} = agent) do
     %{
       id: agent.id,
@@ -42,6 +46,7 @@ defmodule OneAgentWeb.AgentJSON do
       trigger_config: agent.trigger_config,
       max_steps_per_run: agent.max_steps_per_run,
       max_runs_per_day: agent.max_runs_per_day,
+      max_history_messages: agent.max_history_messages,
       llm_config_id: agent.llm_config_id,
       inserted_at: agent.inserted_at,
       updated_at: agent.updated_at
@@ -109,6 +114,17 @@ defmodule OneAgentWeb.AgentJSON do
       expires_at: memory.expires_at,
       inserted_at: memory.inserted_at,
       updated_at: memory.updated_at
+    }
+  end
+
+  defp message_data(%AgentMessage{} = message) do
+    %{
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      sequence: message.sequence,
+      run_id: message.run_id,
+      inserted_at: message.inserted_at
     }
   end
 end

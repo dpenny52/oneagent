@@ -70,6 +70,8 @@ npm run lint       # ESLint
 | **Language** | Elixir 1.19 / Erlang OTP 28 |
 | **Database** | PostgreSQL with binary UUIDs |
 | **Auth** | Bearer tokens (SHA-256 hashed), bcrypt passwords |
+| **Jobs** | Oban (scheduled agent execution, cron sweeper) |
+| **Encryption** | cloak_ecto (AES-256-GCM for credentials) |
 
 ### API Endpoints
 
@@ -97,6 +99,13 @@ npm run lint       # ESLint
 | `POST` | `/api/agents/:id/start` | Start agent process |
 | `POST` | `/api/agents/:id/stop` | Stop agent process |
 | `POST` | `/api/agents/:id/invoke` | Send message to agent |
+| `GET/PUT` | `/api/agents/:id/buckets` | Permission bucket management |
+| `GET` | `/api/agents/:id/runs` | List execution runs |
+| `GET` | `/api/agents/:id/runs/:id` | Run details with steps |
+| `GET` | `/api/agents/:id/memory` | Agent persistent memory |
+| `DELETE` | `/api/agents/:id/memory` | Clear agent memory |
+| `GET` | `/api/agents/:id/messages` | Chat history |
+| `DELETE` | `/api/agents/:id/messages` | Clear chat history |
 | `CRUD` | `/api/credentials` | Encrypted credential storage |
 | `CRUD` | `/api/llm-configs` | LLM API key management |
 | `CRUD` | `/api/whatsapp-channels` | WhatsApp channel config |
@@ -104,6 +113,13 @@ npm run lint       # ESLint
 | `POST` | `/api/webhooks/whatsapp` | Incoming WhatsApp messages |
 
 All agent/credential/channel routes require Bearer auth. Webhook routes are unauthenticated (verified via HMAC-SHA256) and rate-limited to 60 req/min.
+
+### Key Features
+
+- **Chat History** — Conversation messages persist across runs in `agent_messages`. Agents recall prior context (configurable limit via `max_history_messages`, default 20). View with `GET /api/agents/:id/messages`, clear with `DELETE`.
+- **Scheduled Execution** — Agents with `trigger_type: "scheduled"` and a cron expression in `trigger_config` run automatically via Oban. A cron sweeper checks every minute and enqueues execution jobs with deduplication and daily run limits.
+- **Permission Buckets** — Agents operate within granted permission buckets (web_access, email, spending, communication, data_write) that control which tools they can use.
+- **User Isolation** — All agent/credential/channel queries are scoped to the authenticated user. Users can only see and manage their own resources.
 
 ### Commands
 

@@ -61,6 +61,8 @@ defmodule OneAgentWeb.Router do
       get "/runs/:id", AgentController, :show_run
       get "/memory", AgentController, :list_memories
       delete "/memory", AgentController, :delete_memories
+      get "/messages", AgentController, :list_messages
+      delete "/messages", AgentController, :delete_messages
     end
 
     resources "/credentials", CredentialController, except: [:new, :edit]

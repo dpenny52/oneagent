@@ -16,12 +16,14 @@ defmodule OneAgent.Agents.Agent do
     field :trigger_config, :map, default: %{}
     field :max_steps_per_run, :integer, default: 50
     field :max_runs_per_day, :integer, default: 100
+    field :max_history_messages, :integer, default: 20
 
     belongs_to :user, OneAgent.Accounts.User
     belongs_to :llm_config, OneAgent.Credentials.LlmConfig
     has_many :buckets, OneAgent.Agents.AgentBucket
     has_many :runs, OneAgent.Agents.AgentRun
     has_many :memories, OneAgent.Agents.AgentMemory
+    has_many :messages, OneAgent.Agents.AgentMessage
 
     timestamps(type: :utc_datetime)
   end
@@ -33,7 +35,7 @@ defmodule OneAgent.Agents.Agent do
   @required_fields [:name, :system_prompt, :model_provider, :model_id]
   @optional_fields [
     :description, :status, :model_config, :trigger_type,
-    :trigger_config, :max_steps_per_run, :max_runs_per_day, :llm_config_id
+    :trigger_config, :max_steps_per_run, :max_runs_per_day, :max_history_messages, :llm_config_id
   ]
 
   def changeset(agent, attrs) do
@@ -46,6 +48,7 @@ defmodule OneAgent.Agents.Agent do
     |> validate_inclusion(:trigger_type, @valid_triggers)
     |> validate_number(:max_steps_per_run, greater_than: 0, less_than_or_equal_to: 500)
     |> validate_number(:max_runs_per_day, greater_than: 0, less_than_or_equal_to: 10_000)
+    |> validate_number(:max_history_messages, greater_than_or_equal_to: 0, less_than_or_equal_to: 200)
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:llm_config_id)
   end
