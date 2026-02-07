@@ -254,6 +254,100 @@ defmodule OneAgent.ToolsTest do
     end
   end
 
+  describe "send_email recipient validation" do
+    setup %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "email"})
+      %{agent: agent, context: %{agent: agent}}
+    end
+
+    test "rejects missing recipient", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool("send_email", %{"subject" => "Hi", "body" => "Hello"}, context)
+
+      assert msg =~ "Missing required parameter: to"
+    end
+
+    test "rejects empty recipient", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "", "subject" => "Hi", "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "Missing required parameter: to"
+    end
+
+    test "rejects email with spaces (header injection)", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "user @example.com", "subject" => "Hi", "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "Invalid recipient email"
+    end
+
+    test "rejects email with newlines (header injection)", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "user@example.com\nBcc: victim@evil.com", "subject" => "Hi", "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "Invalid recipient email"
+    end
+
+    test "rejects comma-separated recipients", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "a@b.com,c@d.com", "subject" => "Hi", "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "Invalid recipient email"
+    end
+
+    test "rejects semicolon-separated recipients", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "a@b.com;c@d.com", "subject" => "Hi", "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "Invalid recipient email"
+    end
+
+    test "rejects email without @", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "not-an-email", "subject" => "Hi", "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "Invalid recipient email"
+    end
+
+    test "rejects email exceeding 254 characters", %{context: context} do
+      long_email = String.duplicate("a", 250) <> "@b.com"
+
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => long_email, "subject" => "Hi", "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "too long"
+    end
+  end
+
   describe "store_memory and recall_memory tools" do
     test "store and recall round-trip", %{scope: scope} do
       agent = agent_fixture(scope)

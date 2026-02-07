@@ -44,8 +44,29 @@ defmodule OneAgent.Tools.SendEmail do
   @impl true
   def required_credential_type, do: :api_key
 
+  # Same pattern used in User.validate_email — no spaces, commas, or semicolons
+  @email_regex ~r/^[^@,;\s]+@[^@,;\s]+$/
+
   @impl true
   def execute(input, context) do
+    to = input["to"]
+
+    cond do
+      !is_binary(to) or to == "" ->
+        {:error, "Missing required parameter: to (recipient email address)"}
+
+      String.length(to) > 254 ->
+        {:error, "Invalid recipient email: address too long (max 254 characters)"}
+
+      not Regex.match?(@email_regex, to) ->
+        {:error, "Invalid recipient email: must be a valid email address with no spaces, commas, or semicolons"}
+
+      true ->
+        do_send(input, context)
+    end
+  end
+
+  defp do_send(input, context) do
     from_email = Application.get_env(:oneagent, :email_from, "onboarding@resend.dev")
 
     email =
