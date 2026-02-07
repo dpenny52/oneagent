@@ -39,6 +39,7 @@ defmodule OneAgentWeb.AgentJSON do
       name: agent.name,
       description: agent.description,
       status: agent.status,
+      system_prompt: agent.system_prompt,
       model_provider: agent.model_provider,
       model_id: agent.model_id,
       model_config: agent.model_config,

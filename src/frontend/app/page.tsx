@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Instrument_Serif, DM_Sans, Lora } from "next/font/google";
 import { useEffect, useState } from "react";
+import { useAuth } from "./lib/auth";
 
 /* ------------------------------------------------------------------ */
 /*  Fonts                                                              */
@@ -437,6 +438,7 @@ function StepCard({
 /* ================================================================== */
 export default function BioluminescentGardenPage() {
   useKeyframes();
+  const { user, loading: authLoading, logout } = useAuth();
   const [spores, setSpores] = useState<Spore[]>([]);
 
   useEffect(() => {
@@ -455,6 +457,123 @@ export default function BioluminescentGardenPage() {
         position: "relative",
       }}
     >
+      {/* ========== Fixed nav bar ========== */}
+      <motion.nav
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.1 }}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "1rem 2rem",
+          background: "rgba(6,14,18,0.6)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          borderBottom: `1px solid ${C.glow}10`,
+        }}
+      >
+        <a
+          href="/"
+          style={{
+            fontFamily: "var(--font-instrument), serif",
+            fontSize: "1.35rem",
+            color: "#fff",
+            textDecoration: "none",
+            textShadow: `0 0 20px ${C.glow}30`,
+          }}
+        >
+          OneAgent
+        </a>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          {!authLoading && (
+            user ? (
+              <>
+                <a
+                  href="/dashboard"
+                  style={{
+                    padding: "0.5rem 1.2rem",
+                    borderRadius: 10,
+                    background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`,
+                    color: C.bg,
+                    fontFamily: "var(--font-dm), sans-serif",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    transition: "box-shadow 0.2s",
+                  }}
+                >
+                  Dashboard
+                </a>
+                <button
+                  onClick={() => logout()}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderRadius: 10,
+                    border: `1px solid ${C.faint}`,
+                    background: "transparent",
+                    color: C.muted,
+                    fontFamily: "var(--font-dm), sans-serif",
+                    fontSize: "0.85rem",
+                    cursor: "pointer",
+                    transition: "border-color 0.2s, color 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = `${C.glow}55`;
+                    e.currentTarget.style.color = C.text;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = C.faint;
+                    e.currentTarget.style.color = "rgba(216,237,230,0.40)";
+                  }}
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <a
+                  href="/login"
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderRadius: 10,
+                    border: `1px solid ${C.faint}`,
+                    background: "transparent",
+                    color: C.text,
+                    fontFamily: "var(--font-dm), sans-serif",
+                    fontSize: "0.85rem",
+                    textDecoration: "none",
+                    transition: "border-color 0.2s",
+                  }}
+                >
+                  Login
+                </a>
+                <a
+                  href="/register"
+                  style={{
+                    padding: "0.5rem 1.2rem",
+                    borderRadius: 10,
+                    background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`,
+                    color: C.bg,
+                    fontFamily: "var(--font-dm), sans-serif",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                  }}
+                >
+                  Register
+                </a>
+              </>
+            )
+          )}
+        </div>
+      </motion.nav>
+
       {/* ========== Ambient orbs ========== */}
       <Orb size={450} color={C.glow} top="-8%" left="-6%" animation="drift1" duration="20s" opacity={0.14} />
       <Orb size={320} color={C.lavender} top="12%" left="68%" animation="drift2" duration="24s" opacity={0.12} />
@@ -626,7 +745,7 @@ export default function BioluminescentGardenPage() {
 
         {/* CTA */}
         <motion.a
-          href="#"
+          href={user ? "/dashboard" : "/login"}
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.7, delay: 1.1, ease: "easeOut" }}

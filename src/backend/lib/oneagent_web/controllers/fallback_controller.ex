@@ -28,4 +28,11 @@ defmodule OneAgentWeb.FallbackController do
     |> put_view(OneAgentWeb.AuthJSON)
     |> render("error.json", error: message)
   end
+
+  def call(conn, {:error, reason}) when is_atom(reason) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> put_view(OneAgentWeb.AuthJSON)
+    |> render("error.json", error: reason |> Atom.to_string() |> String.replace("_", " "))
+  end
 end

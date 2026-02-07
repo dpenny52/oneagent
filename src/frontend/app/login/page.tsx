@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Instrument_Serif, DM_Sans, Lora } from "next/font/google";
 import { useEffect, useState, FormEvent } from "react";
+import { useAuth } from "../lib/auth";
 
 /* ------------------------------------------------------------------ */
 /*  Fonts                                                              */
@@ -180,6 +181,7 @@ type LoginMode = "password" | "magic-link";
 /* ================================================================== */
 export default function LoginPage() {
   useKeyframes();
+  const { login: authLogin } = useAuth();
   const [spores, setSpores] = useState<Spore[]>([]);
   const [mode, setMode] = useState<LoginMode>("password");
   const [email, setEmail] = useState("");
@@ -187,6 +189,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
 
   useEffect(() => {
     setSpores(generateSpores(30));
@@ -212,10 +217,33 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (res.ok && data.data?.token) {
-        localStorage.setItem("auth_token", data.data.token);
-        window.location.href = "/";
+        authLogin(data.data.token);
+        window.location.href = "/dashboard";
       } else {
         setError(data.error || "Invalid or expired magic link.");
+      }
+    } catch {
+      setError("Unable to connect to the server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleForgotPassword(e: FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: { email: forgotEmail } }),
+      });
+      if (res.ok) {
+        setForgotSent(true);
+      } else {
+        // Always show success to avoid email enumeration
+        setForgotSent(true);
       }
     } catch {
       setError("Unable to connect to the server.");
@@ -236,8 +264,8 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (res.ok && data.data?.token) {
-        localStorage.setItem("auth_token", data.data.token);
-        window.location.href = "/";
+        authLogin(data.data.token);
+        window.location.href = "/dashboard";
       } else {
         setError(data.error || "Invalid email or password.");
       }
@@ -590,8 +618,51 @@ export default function LoginPage() {
           )}
         </AnimatePresence>
 
+        {/* ---- Forgot password inline ---- */}
+        <AnimatePresence>
+          {forgotMode && !forgotSent && (
+            <motion.form
+              key="forgot-form"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+              onSubmit={handleForgotPassword}
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            >
+              <p style={{ fontFamily: "var(--font-dm), sans-serif", fontSize: "0.85rem", color: C.muted, lineHeight: 1.6, marginBottom: "0.25rem" }}>
+                Enter your email and we&apos;ll send you a link to reset your password.
+              </p>
+              <div>
+                <label style={{ display: "block", fontFamily: "var(--font-dm), sans-serif", fontSize: "0.8rem", fontWeight: 500, color: C.text, marginBottom: "0.4rem", letterSpacing: "0.03em" }}>Email</label>
+                <input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@example.com" style={inputStyle} onFocus={(e) => e.currentTarget.setAttribute("style", `${Object.entries(inputStyle).map(([k, v]) => `${k.replace(/([A-Z])/g, "-$1").toLowerCase()}:${v}`).join(";")}; ${inputFocusStyle}`)} onBlur={(e) => { Object.assign(e.currentTarget.style, inputStyle); }} />
+              </div>
+              <motion.button type="submit" disabled={loading} whileHover={loading ? {} : { scale: 1.02, boxShadow: `0 0 30px ${C.glow}33` }} whileTap={loading ? {} : { scale: 0.98 }} style={{ width: "100%", padding: "0.9rem", borderRadius: 12, border: "none", background: loading ? C.forest : `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: loading ? C.muted : C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.95rem", fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", letterSpacing: "0.01em", boxShadow: `0 0 20px ${C.glow}15`, marginTop: "0.5rem", transition: "background 0.3s" }}>
+                {loading ? "Sending..." : "Send Reset Link"}
+              </motion.button>
+              <button type="button" onClick={() => { setForgotMode(false); setError(""); }} style={{ background: "none", border: "none", fontFamily: "var(--font-dm), sans-serif", fontSize: "0.82rem", color: C.muted, cursor: "pointer", padding: "0.5rem 0", transition: "color 0.2s" }} onMouseEnter={(e) => (e.currentTarget.style.color = C.glow)} onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(216,237,230,0.40)")}>
+                Back to sign in
+              </button>
+            </motion.form>
+          )}
+          {forgotMode && forgotSent && (
+            <motion.div key="forgot-sent" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.3 }} style={{ textAlign: "center", padding: "2rem 1rem" }}>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.glowDim, border: `1px solid ${C.glow}33`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={C.glow} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13" /><path d="M22 2L15 22L11 13L2 9L22 2Z" /></svg>
+              </div>
+              <h3 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.25rem", color: "#fff", marginBottom: "0.6rem" }}>Check your email</h3>
+              <p style={{ fontFamily: "var(--font-dm), sans-serif", fontSize: "0.88rem", color: C.muted, lineHeight: 1.6, marginBottom: "1.5rem" }}>
+                If an account exists for <span style={{ color: C.phosphor }}>{forgotEmail}</span>, we sent a password reset link.
+              </p>
+              <button type="button" onClick={() => { setForgotMode(false); setForgotSent(false); setForgotEmail(""); setError(""); }} style={{ padding: "0.5rem 1.2rem", borderRadius: 8, border: `1px solid ${C.faint}`, background: "transparent", color: C.muted, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.82rem", cursor: "pointer", transition: "border-color 0.2s, color 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = `${C.glow}55`; e.currentTarget.style.color = C.text; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.faint; e.currentTarget.style.color = "rgba(216,237,230,0.40)"; }}>
+                Back to sign in
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ---- Forms ---- */}
-        {!magicLinkSent && (
+        {!magicLinkSent && !forgotMode && (
           <AnimatePresence mode="wait">
             {mode === "password" ? (
               <motion.form
@@ -663,20 +734,25 @@ export default function LoginPage() {
 
                 {/* Forgot password link */}
                 <div style={{ textAlign: "right", marginTop: "-0.4rem" }}>
-                  <a
-                    href="/forgot-password"
+                  <button
+                    type="button"
+                    onClick={() => { setForgotMode(true); setError(""); }}
                     style={{
+                      background: "none",
+                      border: "none",
                       fontFamily: "var(--font-dm), sans-serif",
                       fontSize: "0.78rem",
                       color: C.muted,
                       textDecoration: "none",
+                      cursor: "pointer",
+                      padding: 0,
                       transition: "color 0.2s",
                     }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = C.glow)}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = C.muted as string)}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(216,237,230,0.40)")}
                   >
                     Forgot password?
-                  </a>
+                  </button>
                 </div>
 
                 {/* Submit */}
@@ -791,7 +867,7 @@ export default function LoginPage() {
         )}
 
         {/* ---- Divider ---- */}
-        {!magicLinkSent && (
+        {!magicLinkSent && !forgotMode && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -820,7 +896,7 @@ export default function LoginPage() {
         )}
 
         {/* ---- Register link ---- */}
-        {!magicLinkSent && (
+        {!magicLinkSent && !forgotMode && (
           <motion.a
             href="/register"
             initial={{ opacity: 0 }}

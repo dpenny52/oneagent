@@ -1,24 +1,28 @@
 # OneAgent
 
-A landing page gallery showcasing multiple design directions for **OneAgent** — a platform to deploy persistent AI agents that live in the cloud.
+A platform to deploy persistent AI agents that live in the cloud, with a bioluminescent-themed landing page and full authenticated dashboard.
 
 ## Project Structure
 
 ```
 oneagent/
-  src/frontend/           # Next.js app (this is the actual project root for builds/dev)
+  src/frontend/               # Next.js app (this is the actual project root for builds/dev)
     app/
-      layout.tsx          # Root layout — bare HTML shell, no global providers
-      page.tsx            # Home page — directory listing all designs with links
-      globals.css         # Minimal global reset
-      2/page.tsx          # Bioluminescent — organic glow, cyan/purple on dark navy
-      5/page.tsx          # Art Deco — gold on black, geometric luxury, ornamental
-      6/page.tsx          # Celestial Observatory — deep space, stellar gold, star maps
-      7/page.tsx          # Noir Rose Gold — luxury dark minimalism, metallic accents
-      8/page.tsx          # Deep Ocean Abyss — underwater bioluminescence, sonar rings
-      9/page.tsx          # Volcanic Ember — obsidian forge, molten fissures, ember particles
-      10/page.tsx         # Midnight Garden — moonlit botanicals, silver and emerald
-      11/page.tsx         # (new design)
+      layout.tsx              # Root layout — wraps children in <Providers> (AuthProvider)
+      page.tsx                # Landing page — bioluminescent theme, auth-aware nav bar
+      globals.css             # Minimal global reset
+      lib/
+        theme.ts              # Shared color palette (C), style helpers (inputStyle, buttonStyle, etc.)
+        api.ts                # Fetch wrapper — Bearer auth, {data:} unwrap, 401 redirect
+        auth.tsx              # AuthProvider + useAuth() hook (token → GET /api/auth/me)
+        protected.tsx         # Route guard component — redirects to /login if unauthenticated
+        providers.tsx         # "use client" wrapper for AuthProvider (used in layout.tsx)
+      login/page.tsx          # Login — password/magic-link tabs, inline forgot-password
+      register/page.tsx       # Registration — email + password + confirm
+      reset-password/page.tsx # Reset password — token from URL, new password form
+      dashboard/page.tsx      # Agent list — grid cards, create modal, delete (protected)
+      agents/[id]/page.tsx    # Agent detail — Chat, Settings, Permissions, Guide tabs (protected)
+      keys/page.tsx           # LLM API keys + tool credentials CRUD (protected)
     package.json
     next.config.ts
     tsconfig.json
@@ -44,33 +48,42 @@ npm run lint     # ESLint
 
 ## Page Conventions
 
-Every numbered page (`/2`, `/5`, `/6`, etc.) follows the same pattern:
+All pages are `"use client"` components with:
 
-1. **`"use client"`** directive at top — all pages are client components
-2. **Imports**: `motion` from framer-motion, 2-3 Google Fonts, React hooks
-3. **Google Fonts** initialized at module scope with `next/font/google`
-4. **Color constants** defined as a palette object or individual constants
-5. **Keyframe injection** via `useEffect` that creates a `<style>` element with an ID guard to prevent duplicates
-6. **`useCountUp` hook** — custom hook using `IntersectionObserver` + `requestAnimationFrame` with eased animation for stat counters
-7. **ALL styles are inline** `style={{}}` objects — no Tailwind utility classes, no CSS modules, no external stylesheets
-8. **Framer Motion `whileInView`** for scroll-triggered entrance animations
-9. **Single default export** function component
+1. **Google Fonts** initialized at module scope (`Instrument_Serif`, `DM_Sans`, `Lora`)
+2. **Keyframe injection** via `useEffect` with an ID guard to prevent duplicates
+3. **ALL styles are inline** `style={{}}` objects — no Tailwind utility classes, no CSS modules
+4. **Framer Motion** for animations (`motion`, `AnimatePresence`)
+5. **Shared theme** from `app/lib/theme.ts` — color palette `C`, style helpers
 
-### Content Structure (consistent across all pages)
+### Common Pitfalls
 
-Each page presents the same product content with a unique aesthetic:
+- **Agent start requires `llm_config_id`** — backend returns 422 "Agent has no LLM configuration assigned" if nil. Frontend shows error banner.
+- **Tab-scoped data fetching** — useEffects that refetch on `tab` change will overwrite unsaved local state. Use a `loaded` flag to fetch only once.
+- **Model options** — `MODEL_OPTIONS` map in both `dashboard/page.tsx` and `agents/[id]/page.tsx` defines provider→model lists. Keep in sync. Settings select includes a fallback option for non-matching existing model IDs.
+- **Keys page placeholders** — Label and API key placeholders are provider-aware (Anthropic vs OpenAI).
 
-1. **Hero** — "OneAgent" title, tagline ("A living agent. Always awake. One click to life."), subtext about persistent AI, CTA button, scroll indicator
-2. **Features** — 3 cards: "Instant Birth" (deploy <30s), "Persistent Memory" (knowledge graph), "Always Alive" (24/7 uptime)
-3. **Lifecycle/Process** — Visualization of: Prompt → Spawn → Learn → Act → Remember → Evolve
-4. **Stats** — 12,847 Agents, 99.99% Uptime, 28s Avg Deploy (animated counters)
-5. **Final CTA** — Closing call-to-action with button
-6. **Footer** — Copyright and minimal links
+### Dashboard Pages
 
-### Adding a New Design
+Protected pages wrap content in `<Protected>` which checks `useAuth()` and redirects to `/login`.
 
-1. Create `src/frontend/app/{N}/page.tsx` following the conventions above
-2. Add an entry to the `designs` array in `src/frontend/app/page.tsx`
+Common layout pattern:
+- **Top bar**: sticky nav with OneAgent logo → /dashboard, "Keys" link, user email, logout
+- **Ambient orbs** + mesh gradient background (same bioluminescent aesthetic as landing)
+- **Glass cards** via `glassCard()` helper (blur, translucent backgrounds, glow borders)
+
+### Route Map
+
+| Route | Auth | Description |
+|-------|------|-------------|
+| `/` | No | Landing page with auth-aware nav (Login/Register or Dashboard/Logout) |
+| `/login` | No | Password + magic link login, inline forgot-password |
+| `/register` | No | Email + password registration |
+| `/reset-password?token=` | No | New password form (token from email) |
+| `/dashboard` | Yes | Agent grid — create, open, delete agents |
+| `/agents/[id]` | Yes | Agent detail — Chat, Settings, Permissions, Guide tabs |
+| `/agents/[id]?tab=guide` | Yes | Opens agent detail directly on Guide tab |
+| `/keys` | Yes | LLM API keys + tool credentials management |
 
 ---
 
@@ -278,3 +291,116 @@ The user prefers **dark, atmospheric, luxurious** aesthetics with:
 - Glass/blur/transparency effects
 
 Routes `/2` (Bioluminescent) and `/5` (Art Deco) are the original favorites that set the tone for all subsequent designs.
+
+---
+
+## Browser Testing
+
+Use the Chrome MCP browser automation tools to test the dashboard UI. Both servers must be running first.
+
+### Starting Servers
+
+```bash
+# Terminal 1: Backend (Phoenix)
+cd src/backend && mix phx.server    # localhost:4000
+
+# Terminal 2: Frontend (Next.js)
+cd src/frontend && npm run dev      # localhost:3000
+```
+
+### Test Account
+
+Register a test user via curl or through the UI:
+
+```bash
+curl -X POST http://localhost:4000/api/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"user": {"email": "test@oneagent.dev", "password": "testpassword123"}}'
+```
+
+Credentials: `test@oneagent.dev` / `testpassword123`
+
+### Test Script
+
+Run through these flows using the Chrome MCP tools (`tabs_context_mcp`, `navigate`, `find`, `computer`, `read_page`, etc.):
+
+#### 1. Landing Page Nav
+- Navigate to `http://localhost:3000/`
+- Verify nav bar shows "Login" and "Register" buttons (unauthenticated)
+- Click "Login" → verify redirect to `/login`
+
+#### 2. Registration
+- Navigate to `http://localhost:3000/register`
+- Fill email, password (12+ chars), confirm password
+- Submit → verify redirect to `/dashboard`
+- Verify nav now shows "Dashboard" and "Logout"
+
+#### 3. Login
+- Logout first, then navigate to `/login`
+- Enter test credentials → submit
+- Verify redirect to `/dashboard`
+- Test "Forgot password?" link shows inline email form
+
+#### 4. Dashboard — Agent CRUD
+- On `/dashboard`, verify "Your Agents" heading, "Create Agent" button
+- Click "Create Agent" → fill modal (name, provider, model_id, system prompt)
+- Submit → verify new agent card appears in grid
+- Verify card shows name, status badge, model provider, trigger type
+- Click "Open" → verify redirect to `/agents/[id]`
+- Go back, click delete (✕) → verify agent removed
+
+#### 5. Agent Detail — Chat Tab
+- Open an agent → verify on Chat tab by default
+- If agent not running, verify yellow banner "Start agent to begin chatting"
+- Click "Start" → verify status changes to "running"
+- Type a message, press Enter → verify optimistic user bubble appears
+- Verify typing indicator (3 dots) shows while waiting
+- Verify assistant response appears (or error if no LLM key configured)
+- Click "Clear History" → verify messages cleared
+
+#### 6. Agent Detail — Settings Tab
+- Click "Settings" tab
+- Verify form pre-populated with agent data (name, description, model, prompt, etc.)
+- Change a field (e.g. description) → click "Save Settings"
+- Verify "Saved!" message appears
+- Switch trigger type to "scheduled" → verify cron input + presets appear
+- Click a cron preset (e.g. "Every 5 min") → verify input updates
+
+#### 7. Agent Detail — Permissions Tab
+- Click "Permissions" tab
+- Verify 5 bucket cards (web_access, email, spending, communication, data_write)
+- Toggle one on → verify toggle turns green, credential dropdown appears
+- Click "Save Permissions"
+
+#### 8. Agent Detail — Guide Tab
+- Click "Guide" tab (or navigate to `/agents/[id]?tab=guide`)
+- Verify API Access section with agent ID and curl examples
+- Verify copy buttons work (click "Copy" → changes to "Copied!")
+- Verify WhatsApp Setup section with numbered steps
+- Verify Scheduling section with cron patterns table
+
+#### 9. Keys Page
+- Navigate to `/keys`
+- **LLM API Keys**: Click "+ Add Key" → fill provider, label, API key → submit
+- Verify new key appears in list with provider badge
+- Click "Edit" → verify form pre-fills (api_key blank) → update label → save
+- Click delete (✕) → verify removed
+- **Tool Credentials**: Click "+ Add Credential" → fill name, service, type, value → submit
+- Verify credential appears with service badge
+- Test edit and delete
+
+#### 10. Auth Protection
+- Logout via nav button
+- Try navigating directly to `/dashboard` → verify redirect to `/login`
+- Try `/agents/some-id` → verify redirect to `/login`
+- Try `/keys` → verify redirect to `/login`
+
+### Tips for Chrome MCP Testing
+
+- Call `tabs_context_mcp` first to get/create a tab
+- Use `find` to locate elements by text (e.g., `find("Create Agent button")`)
+- Use `form_input` with `ref` from `read_page` to fill inputs
+- Use `computer` with `action: "screenshot"` to visually verify state
+- Use `get_page_text` to quickly check page content
+- Auth token is stored in localStorage — use `javascript_tool` to check: `localStorage.getItem("auth_token")`
+- Rate limiting: auth routes are limited to 5 req/min — if you hit 429, wait 60 seconds

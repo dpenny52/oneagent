@@ -6,7 +6,9 @@
   padding: 0;
 }
 
-body {
+html, body {
+  background: #060E12;
+  color: #e0e0e0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

@@ -86,8 +86,14 @@ defmodule OneAgent.Runtime.AgentProcess do
     case agentic_loop(state, run, messages, tool_defs, system, 0) do
       {:ok, final_text, run} ->
         # Persist user message and assistant response to chat history
-        Agents.create_message(agent, %{role: "user", content: message, run_id: run.id})
-        Agents.create_message(agent, %{role: "assistant", content: final_text, run_id: run.id})
+        case Agents.create_message(agent, %{role: "user", content: message, run_id: run.id}) do
+          {:ok, _} -> :ok
+          {:error, cs} -> Logger.warning("Failed to save user message: #{inspect(cs.errors)}")
+        end
+        case Agents.create_message(agent, %{role: "assistant", content: final_text, run_id: run.id}) do
+          {:ok, _} -> :ok
+          {:error, cs} -> Logger.warning("Failed to save assistant message: #{inspect(cs.errors)}")
+        end
         {:ok, %{run_id: run.id, response: final_text}}
 
       {:error, reason, run} ->
@@ -142,6 +148,14 @@ defmodule OneAgent.Runtime.AgentProcess do
               |> Enum.filter(&(&1.type == :text))
               |> Enum.map(& &1.text)
               |> Enum.join("\n")
+
+            # LLM sometimes returns empty content after tool use — provide a fallback
+            final_text = if final_text == "" do
+              Logger.warning("LLM returned empty content for agent #{agent.id}, stop_reason=#{response.stop_reason}")
+              "[Agent produced no response]"
+            else
+              final_text
+            end
 
             {:ok, run} = Agents.complete_run(run, %{
               total_steps: step_count + 1,
@@ -253,7 +267,17 @@ defmodule OneAgent.Runtime.AgentProcess do
         "\n\n## Your Memories\n#{Enum.join(items, "\n")}"
     end
 
-    agent.system_prompt <> memory_section
+    context_section = """
+
+    ## How Your Memory Works
+    - Your conversation history (the last #{agent.max_history_messages} messages) is included in this conversation. \
+    For recent questions like "what did I just ask?", refer to the messages above — do NOT use recall_memory for that.
+    - Use store_memory to save important facts, preferences, or patterns that should persist beyond the conversation window.
+    - Use recall_memory only when you need to retrieve something you previously stored with store_memory.
+    - Always respond with a text message. Never end your turn silently after using a tool.
+    """
+
+    agent.system_prompt <> context_section <> memory_section
   end
 
   defp resolve_api_key(agent) do
