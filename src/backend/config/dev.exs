@@ -62,10 +62,9 @@ config :phoenix, :stacktrace_depth, 20
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
 
-# Use Resend for real email delivery in dev
+# Use Resend adapter — API key comes from agent credentials at runtime
 config :oneagent, OneAgent.Mailer,
-  adapter: Swoosh.Adapters.Resend,
-  api_key: System.get_env("RESEND_API_KEY", "")
+  adapter: Swoosh.Adapters.Resend
 
 config :swoosh, :api_client, Swoosh.ApiClient.Finch
 

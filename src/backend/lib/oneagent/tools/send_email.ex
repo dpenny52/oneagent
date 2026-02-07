@@ -42,7 +42,7 @@ defmodule OneAgent.Tools.SendEmail do
   end
 
   @impl true
-  def required_credential_type, do: nil
+  def required_credential_type, do: :api_key
 
   @impl true
   def execute(input, context) do
@@ -56,7 +56,14 @@ defmodule OneAgent.Tools.SendEmail do
         text_body: input["body"]
       )
 
-    case OneAgent.Mailer.deliver(email) do
+    # Pass credential as Resend API key override if available
+    deliver_config =
+      case context[:credential_value] do
+        nil -> []
+        api_key -> [api_key: api_key]
+      end
+
+    case OneAgent.Mailer.deliver(email, deliver_config) do
       {:ok, _} ->
         {:ok, %{"sent_to" => input["to"], "subject" => input["subject"]}}
 
