@@ -29,7 +29,10 @@ defmodule OneAgent.LLM.Anthropic do
       {"content-type", "application/json"}
     ]
 
-    case Req.post(@api_url, json: body, headers: headers, receive_timeout: 120_000) do
+    req_opts = Keyword.get(opts, :plug)
+    extra = if req_opts, do: [plug: req_opts], else: []
+
+    case Req.post(@api_url, [json: body, headers: headers, receive_timeout: 120_000] ++ extra) do
       {:ok, %Req.Response{status: 200, body: resp}} ->
         {:ok, parse_response(resp)}
 
@@ -44,13 +47,16 @@ defmodule OneAgent.LLM.Anthropic do
 
   defp parse_response(resp) do
     content =
-      resp["content"]
-      |> Enum.map(fn
+      (resp["content"] || [])
+      |> Enum.flat_map(fn
         %{"type" => "text", "text" => text} ->
-          %{type: :text, text: text}
+          [%{type: :text, text: text}]
 
         %{"type" => "tool_use", "id" => id, "name" => name, "input" => input} ->
-          %{type: :tool_use, id: id, name: name, input: input}
+          [%{type: :tool_use, id: id, name: name, input: input}]
+
+        _unrecognized ->
+          []
       end)
 
     usage = %{
