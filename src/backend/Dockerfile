@@ -1,9 +1,9 @@
 # Backend Dockerfile — multi-stage Phoenix release build
 # https://hexdocs.pm/phoenix/releases.html
 
-ARG ELIXIR_VERSION=1.18.3
-ARG OTP_VERSION=27.3
-ARG DEBIAN_VERSION=bookworm-20250113-slim
+ARG ELIXIR_VERSION=1.17.3
+ARG OTP_VERSION=27.2
+ARG DEBIAN_VERSION=bookworm-20260202-slim
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
@@ -30,6 +30,7 @@ RUN mix deps.compile
 # Copy app source
 COPY priv priv
 COPY lib lib
+COPY rel rel
 
 # Compile
 RUN mix compile
