@@ -78,12 +78,13 @@ defmodule OneAgent.Runtime.AgentProcess do
     # Get tool definitions filtered by agent's buckets
     tool_defs = Tools.tool_definitions_for_agent(agent)
 
-    # Get relevant memories for context
+    # Get relevant memories and schedules for context
     memories = Agents.list_memories(agent)
-    system = build_system_prompt(agent, memories)
+    schedules = Agents.list_schedules(agent)
+    system = build_system_prompt(agent, memories, schedules)
 
     # Run the loop
-    case agentic_loop(state, run, messages, tool_defs, system, 0) do
+    case agentic_loop(state, run, messages, tool_defs, system, 0, []) do
       {:ok, final_text, run} ->
         # Persist user message and assistant response to chat history
         case Agents.create_message(agent, %{role: "user", content: message, run_id: run.id}) do
@@ -104,7 +105,7 @@ defmodule OneAgent.Runtime.AgentProcess do
     end
   end
 
-  defp agentic_loop(state, run, messages, tool_defs, system, step_count) do
+  defp agentic_loop(state, run, messages, tool_defs, system, step_count, prev_tools \\ []) do
     agent = state.agent
 
     if step_count >= agent.max_steps_per_run do
@@ -149,46 +150,86 @@ defmodule OneAgent.Runtime.AgentProcess do
               |> Enum.map(& &1.text)
               |> Enum.join("\n")
 
-            # LLM sometimes returns empty content after tool use — provide a fallback
-            final_text = if final_text == "" do
-              Logger.warning("LLM returned empty content for agent #{agent.id}, stop_reason=#{response.stop_reason}")
-              "[Agent produced no response]"
+            # LLM sometimes returns empty content after tool use — retry once WITHOUT tools,
+            # including recent tool results so the LLM has context to form a response
+            if final_text == "" and step_count > 0 and step_count < agent.max_steps_per_run - 1 do
+              Logger.warning("LLM returned empty content for agent #{agent.id}, retrying without tools")
+
+              tool_summary = extract_recent_tool_results(messages)
+
+              nudge_text = case tool_summary do
+                "" -> "[System: Please respond with a text message to the user.]"
+                summary -> "[System: Your tool call returned: #{summary}. Please tell the user about these results.]"
+              end
+
+              nudge = %{"role" => "user", "content" => [
+                %{"type" => "text", "text" => nudge_text}
+              ]}
+
+              retry_messages = messages ++ [
+                %{"role" => "assistant", "content" => []},
+                nudge
+              ]
+
+              # Pass empty tools list to force text-only response
+              agentic_loop(state, run, retry_messages, [], system, step_count + 1, prev_tools)
             else
-              final_text
+              final_text = if final_text == "", do: "[Agent produced no response]", else: final_text
+
+              {:ok, run} = Agents.complete_run(run, %{
+                total_steps: step_count + 1,
+                total_tokens_used: tokens
+              })
+
+              {:ok, final_text, run}
             end
-
-            {:ok, run} = Agents.complete_run(run, %{
-              total_steps: step_count + 1,
-              total_tokens_used: tokens
-            })
-
-            {:ok, final_text, run}
           else
-            # Execute tools and continue loop
-            {tool_results, new_step_count} =
-              execute_tool_calls(state, run, tool_uses, step_count + 1)
+            current_tools = tool_uses |> Enum.map(& &1.name) |> Enum.sort()
 
-            # Loop back to LLM for a text response
-            assistant_content = Enum.map(response.content, fn
-              %{type: :text, text: text} -> %{"type" => "text", "text" => text}
-              %{type: :tool_use, id: id, name: name, input: input} ->
-                %{"type" => "tool_use", "id" => id, "name" => name, "input" => input}
-            end)
+            # Detect repeated tool calls BEFORE executing — if LLM is calling the
+            # same tools as last round, skip execution and nudge with previous results
+            if current_tools == prev_tools and prev_tools != [] do
+              Logger.warning("Agent #{agent.id} repeated tool calls #{inspect(current_tools)}, skipping and forcing text response")
 
-            tool_result_msgs = Enum.map(tool_results, fn {tool_use_id, result} ->
-              %{
-                "type" => "tool_result",
-                "tool_use_id" => tool_use_id,
-                "content" => Jason.encode!(result)
-              }
-            end)
+              prev_tool_summary = extract_recent_tool_results(messages)
 
-            updated_messages = messages ++ [
-              %{"role" => "assistant", "content" => assistant_content},
-              %{"role" => "user", "content" => tool_result_msgs}
-            ]
+              nudge = %{"role" => "user", "content" => [
+                %{"type" => "text", "text" => "[System: You already completed this action successfully. The results were: #{prev_tool_summary}. Do NOT call any more tools. Respond to the user confirming what you did.]"}
+              ]}
 
-            agentic_loop(state, run, updated_messages, tool_defs, system, new_step_count)
+              nudge_messages = messages ++ [
+                %{"role" => "assistant", "content" => []},
+                nudge
+              ]
+
+              agentic_loop(state, run, nudge_messages, [], system, step_count + 1, current_tools)
+            else
+              # Execute tools and continue loop
+              {tool_results, new_step_count} =
+                execute_tool_calls(state, run, tool_uses, step_count + 1)
+
+              # Loop back to LLM for a text response
+              assistant_content = Enum.map(response.content, fn
+                %{type: :text, text: text} -> %{"type" => "text", "text" => text}
+                %{type: :tool_use, id: id, name: name, input: input} ->
+                  %{"type" => "tool_use", "id" => id, "name" => name, "input" => input}
+              end)
+
+              tool_result_msgs = Enum.map(tool_results, fn {tool_use_id, result} ->
+                %{
+                  "type" => "tool_result",
+                  "tool_use_id" => tool_use_id,
+                  "content" => Jason.encode!(result)
+                }
+              end)
+
+              updated_messages = messages ++ [
+                %{"role" => "assistant", "content" => assistant_content},
+                %{"role" => "user", "content" => tool_result_msgs}
+              ]
+
+              agentic_loop(state, run, updated_messages, tool_defs, system, new_step_count, current_tools)
+            end
           end
 
         {:error, reason} ->
@@ -257,7 +298,7 @@ defmodule OneAgent.Runtime.AgentProcess do
     {Enum.reverse(results), final_step}
   end
 
-  defp build_system_prompt(agent, memories) do
+  defp build_system_prompt(agent, memories, schedules) do
     memory_section = case memories do
       [] -> ""
       mems ->
@@ -265,6 +306,18 @@ defmodule OneAgent.Runtime.AgentProcess do
           "- #{m.key} (#{m.memory_type}): #{Jason.encode!(m.value)}"
         end)
         "\n\n## Your Memories\n#{Enum.join(items, "\n")}"
+    end
+
+    schedule_section = case schedules do
+      [] -> ""
+      scheds ->
+        items = Enum.map(scheds, fn s ->
+          status = if s.enabled, do: "enabled", else: "disabled"
+          last_run = if s.last_run_at, do: " (last ran: #{DateTime.to_iso8601(s.last_run_at)})", else: ""
+          message = if s.message, do: " — \"#{s.message}\"", else: ""
+          "- [#{s.id}] #{s.cron} (#{status})#{message}#{last_run}"
+        end)
+        "\n\n## Your Schedules\n#{Enum.join(items, "\n")}"
     end
 
     context_section = """
@@ -275,9 +328,31 @@ defmodule OneAgent.Runtime.AgentProcess do
     - Use store_memory to save important facts, preferences, or patterns that should persist beyond the conversation window.
     - Use recall_memory only when you need to retrieve something you previously stored with store_memory.
     - Always respond with a text message. Never end your turn silently after using a tool.
+
+    ## Schedule Management
+    - Use list_schedules to see your current cron schedules (or check the "Your Schedules" section above).
+    - Use manage_schedule with action "create" to add a new schedule, "update" to modify one, or "delete" to remove one.
+    - Schedule IDs shown in brackets (e.g. [abc-123]) can be used as the schedule_id parameter for update/delete.
+    - Cron format: "minute hour day-of-month month day-of-week" (e.g. "*/5 * * * *" = every 5 minutes, "0 9 * * 1-5" = weekdays at 9am).
+    - IMPORTANT: After a manage_schedule call succeeds, immediately respond with a text message confirming the action. \
+    Never call manage_schedule again after a successful result — one call per action is all you need.
     """
 
-    agent.system_prompt <> context_section <> memory_section
+    agent.system_prompt <> context_section <> memory_section <> schedule_section
+  end
+
+  # Extracts the most recent tool_result content from the message history
+  defp extract_recent_tool_results(messages) do
+    messages
+    |> Enum.reverse()
+    |> Enum.find_value(fn
+      %{"role" => "user", "content" => content} when is_list(content) ->
+        results = Enum.filter(content, &(is_map(&1) and &1["type"] == "tool_result"))
+        if results != [], do: Enum.map_join(results, "; ", & &1["content"])
+
+      _ -> nil
+    end)
+    |> Kernel.||("")
   end
 
   defp resolve_api_key(agent) do

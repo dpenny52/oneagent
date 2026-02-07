@@ -13,7 +13,9 @@ defmodule OneAgent.Tools do
     OneAgent.Tools.ReadWebpage,
     OneAgent.Tools.SendEmail,
     OneAgent.Tools.StoreMemory,
-    OneAgent.Tools.RecallMemory
+    OneAgent.Tools.RecallMemory,
+    OneAgent.Tools.ListSchedules,
+    OneAgent.Tools.ManageSchedule
   ]
 
   @doc """

@@ -15,7 +15,7 @@ defmodule OneAgent.ToolsTest do
   describe "all_tools/0" do
     test "returns all registered tools" do
       tools = Tools.all_tools()
-      assert length(tools) == 5
+      assert length(tools) == 7
 
       ids = Enum.map(tools, & &1.id())
       assert "http_request" in ids
@@ -23,6 +23,8 @@ defmodule OneAgent.ToolsTest do
       assert "send_email" in ids
       assert "store_memory" in ids
       assert "recall_memory" in ids
+      assert "list_schedules" in ids
+      assert "manage_schedule" in ids
     end
   end
 
@@ -30,6 +32,8 @@ defmodule OneAgent.ToolsTest do
     test "finds tool by id" do
       assert Tools.get_tool("http_request") == OneAgent.Tools.HttpRequest
       assert Tools.get_tool("store_memory") == OneAgent.Tools.StoreMemory
+      assert Tools.get_tool("list_schedules") == OneAgent.Tools.ListSchedules
+      assert Tools.get_tool("manage_schedule") == OneAgent.Tools.ManageSchedule
     end
 
     test "returns nil for unknown tool" do
@@ -38,7 +42,7 @@ defmodule OneAgent.ToolsTest do
   end
 
   describe "tool_definitions_for_agent/1" do
-    test "includes memory tools regardless of buckets", %{scope: scope} do
+    test "includes memory and schedule tools regardless of buckets", %{scope: scope} do
       agent = agent_fixture(scope)
       # Agent has no buckets granted
 
@@ -47,6 +51,8 @@ defmodule OneAgent.ToolsTest do
 
       assert "store_memory" in names
       assert "recall_memory" in names
+      assert "list_schedules" in names
+      assert "manage_schedule" in names
       # http_request included (dynamic bucket, nil static)
       assert "http_request" in names
     end
@@ -106,6 +112,14 @@ defmodule OneAgent.ToolsTest do
       assert result["count"] == 0
     end
 
+    test "allows schedule tools without any buckets", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil}
+
+      assert {:ok, result} = Tools.execute_tool("list_schedules", %{}, context)
+      assert result["count"] == 0
+    end
+
     test "returns error for unknown tool", %{scope: scope} do
       agent = agent_fixture(scope)
       context = %{agent: agent}
@@ -150,6 +164,271 @@ defmodule OneAgent.ToolsTest do
 
       assert {:ok, result} = Tools.execute_tool("recall_memory", %{}, context)
       assert result["count"] == 2
+    end
+  end
+
+  describe "list_schedules tool" do
+    test "returns empty list when no schedules", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      assert {:ok, result} = Tools.execute_tool("list_schedules", %{}, context)
+      assert result["schedules"] == []
+      assert result["count"] == 0
+    end
+
+    test "returns all schedules", %{scope: scope} do
+      agent = agent_fixture(scope)
+      _s1 = schedule_fixture(agent, %{"cron" => "*/5 * * * *", "message" => "Check updates"})
+      _s2 = schedule_fixture(agent, %{"cron" => "0 9 * * 1-5", "message" => "Morning brief", "enabled" => false})
+      context = %{agent: agent}
+
+      assert {:ok, result} = Tools.execute_tool("list_schedules", %{}, context)
+      assert result["count"] == 2
+
+      crons = Enum.map(result["schedules"], & &1["cron"])
+      assert "*/5 * * * *" in crons
+      assert "0 9 * * 1-5" in crons
+    end
+
+    test "filters to enabled_only", %{scope: scope} do
+      agent = agent_fixture(scope)
+      _s1 = schedule_fixture(agent, %{"cron" => "*/5 * * * *", "enabled" => true})
+      _s2 = schedule_fixture(agent, %{"cron" => "0 9 * * 1-5", "enabled" => false})
+      context = %{agent: agent}
+
+      assert {:ok, result} = Tools.execute_tool("list_schedules", %{"enabled_only" => true}, context)
+      assert result["count"] == 1
+      assert hd(result["schedules"])["cron"] == "*/5 * * * *"
+    end
+
+    test "includes schedule fields", %{scope: scope} do
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent, %{"cron" => "0 * * * *", "message" => "Hourly"})
+      context = %{agent: agent}
+
+      assert {:ok, result} = Tools.execute_tool("list_schedules", %{}, context)
+      [item] = result["schedules"]
+      assert item["id"] == schedule.id
+      assert item["cron"] == "0 * * * *"
+      assert item["message"] == "Hourly"
+      assert item["enabled"] == true
+      assert item["last_run_at"] == nil
+    end
+  end
+
+  describe "manage_schedule tool — create" do
+    test "creates a schedule", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      assert {:ok, result} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "cron" => "*/10 * * * *",
+        "message" => "Every 10 minutes"
+      }, context)
+
+      assert result["action"] == "created"
+      assert result["success"] == true
+      assert result["schedule"]["cron"] == "*/10 * * * *"
+      assert result["schedule"]["message"] == "Every 10 minutes"
+      assert result["schedule"]["enabled"] == true
+      assert result["schedule"]["id"] != nil
+      assert result["note"] =~ "successfully"
+    end
+
+    test "deduplicates when same cron + message already exists", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      # First create
+      assert {:ok, first} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "cron" => "0 * * * *",
+        "message" => "Hourly check"
+      }, context)
+
+      assert first["action"] == "created"
+
+      # Second create with same cron + message — should return existing
+      assert {:ok, second} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "cron" => "0 * * * *",
+        "message" => "Hourly check"
+      }, context)
+
+      assert second["action"] == "already_exists"
+      assert second["schedule"]["id"] == first["schedule"]["id"]
+
+      # Verify only one schedule exists
+      assert {:ok, %{"count" => 1}} = Tools.execute_tool("list_schedules", %{}, context)
+    end
+
+    test "creates a disabled schedule", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      assert {:ok, result} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "cron" => "0 9 * * *",
+        "enabled" => false
+      }, context)
+
+      assert result["schedule"]["enabled"] == false
+    end
+
+    test "returns error for invalid cron", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "cron" => "not a cron"
+      }, context)
+
+      assert msg =~ "cron"
+    end
+
+    test "returns error when cron is missing", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "message" => "No cron provided"
+      }, context)
+
+      assert msg =~ "cron"
+    end
+  end
+
+  describe "manage_schedule tool — update" do
+    test "updates a schedule", %{scope: scope} do
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+      context = %{agent: agent}
+
+      assert {:ok, result} = Tools.execute_tool("manage_schedule", %{
+        "action" => "update",
+        "schedule_id" => schedule.id,
+        "message" => "Updated message",
+        "enabled" => false
+      }, context)
+
+      assert result["action"] == "updated"
+      assert result["schedule"]["message"] == "Updated message"
+      assert result["schedule"]["enabled"] == false
+    end
+
+    test "updates cron expression", %{scope: scope} do
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+      context = %{agent: agent}
+
+      assert {:ok, result} = Tools.execute_tool("manage_schedule", %{
+        "action" => "update",
+        "schedule_id" => schedule.id,
+        "cron" => "0 0 * * *"
+      }, context)
+
+      assert result["schedule"]["cron"] == "0 0 * * *"
+    end
+
+    test "returns error when schedule_id is missing", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      assert {:error, "schedule_id is required for update"} =
+        Tools.execute_tool("manage_schedule", %{"action" => "update", "message" => "New"}, context)
+    end
+
+    test "returns error when schedule not found", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      fake_id = Ecto.UUID.generate()
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{
+        "action" => "update",
+        "schedule_id" => fake_id
+      }, context)
+
+      assert msg =~ "Schedule not found"
+    end
+
+    test "cannot update another agent's schedule", %{scope: scope} do
+      agent1 = agent_fixture(scope)
+      agent2 = agent_fixture(scope)
+      schedule = schedule_fixture(agent2)
+      context = %{agent: agent1}
+
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{
+        "action" => "update",
+        "schedule_id" => schedule.id,
+        "message" => "Hijacked"
+      }, context)
+
+      assert msg =~ "Schedule not found"
+    end
+  end
+
+  describe "manage_schedule tool — delete" do
+    test "deletes a schedule", %{scope: scope} do
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+      context = %{agent: agent}
+
+      assert {:ok, result} = Tools.execute_tool("manage_schedule", %{
+        "action" => "delete",
+        "schedule_id" => schedule.id
+      }, context)
+
+      assert result["deleted"] == true
+      assert result["schedule_id"] == schedule.id
+
+      # Verify it's actually deleted
+      assert {:ok, %{"count" => 0}} = Tools.execute_tool("list_schedules", %{}, context)
+    end
+
+    test "returns error when schedule_id is missing", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      assert {:error, "schedule_id is required for delete"} =
+        Tools.execute_tool("manage_schedule", %{"action" => "delete"}, context)
+    end
+
+    test "returns error when schedule not found", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      fake_id = Ecto.UUID.generate()
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{
+        "action" => "delete",
+        "schedule_id" => fake_id
+      }, context)
+
+      assert msg =~ "Schedule not found"
+    end
+  end
+
+  describe "manage_schedule tool — error cases" do
+    test "returns error for unknown action", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{
+        "action" => "pause"
+      }, context)
+
+      assert msg =~ "Unknown action"
+    end
+
+    test "returns error when action is missing", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{}, context)
+      assert msg =~ "Missing required parameter: action"
     end
   end
 end

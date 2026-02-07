@@ -114,6 +114,14 @@ src/backend/                   # Elixir/Phoenix API-only app
         credential.ex          # Encrypted credential schema (AES-256-GCM)
         llm_config.ex          # LLM API key schema
       credentials.ex           # Credentials context (CRUD + decryption)
+      tools/                   # Agent tools (LLM-callable)
+        http_request.ex        # HTTP requests (dynamic bucket based on URL)
+        read_webpage.ex        # Read webpage content (web_access bucket)
+        send_email.ex          # Send email (email bucket)
+        store_memory.ex        # Store key-value memory (no bucket)
+        recall_memory.ex       # Recall stored memory (no bucket)
+        list_schedules.ex      # List agent's cron schedules (no bucket)
+        manage_schedule.ex     # Create/update/delete schedules (no bucket)
       runtime/                 # Agent runtime
         agent_process.ex       # GenServer per agent — agentic loop with chat history
         agent_supervisor.ex    # DynamicSupervisor for agent processes
@@ -281,6 +289,23 @@ Agents support multiple cron schedules via the `agent_schedules` table. Each sch
 - **ScheduledExecution** — executes a single schedule's run with uniqueness (60s per schedule_id), uses `Runtime.invoke_agent/4` (auto-starts process), updates `last_run_at` on schedule
 
 **Config:** Create schedules via `POST /api/agents/:id/schedules` with `{"schedule": {"cron": "*/5 * * * *", "message": "Check for updates"}}`. Agent must have an `llm_config_id` assigned. No manual start needed — schedules fire automatically.
+
+### Agent Tools
+
+Tools are registered in `OneAgent.Tools` and exposed to the LLM filtered by the agent's active permission buckets. Tools with `bucket: nil` are always available.
+
+**Available tools:** `http_request` (dynamic bucket), `read_webpage` (web_access), `send_email` (email), `store_memory` (nil), `recall_memory` (nil), `list_schedules` (nil), `manage_schedule` (nil).
+
+**Schedule tools:** `list_schedules` returns all/enabled schedules. `manage_schedule` supports create/update/delete actions with dedup on create (same cron+message returns `already_exists`).
+
+### Agentic Loop
+
+`AgentProcess` runs a loop: LLM call → check for tool_use → execute tools → loop back with results → until text response.
+
+**Key mitigations for smaller models (e.g. GPT-4o-mini):**
+- **Repeated tool call detection:** If the LLM calls the same tools as the previous round, the second call is SKIPPED (not executed) and a nudge message is injected with the previous round's results, forcing a text response. This prevents wasted API calls, dedup confusion, and misleading error-based responses.
+- **Empty content retry:** If the LLM returns empty text after tool use, a nudge with recent tool results is injected and the loop retries without tools.
+- **Tool result notes:** `manage_schedule` results include a `note` field instructing the LLM to respond with text and not call the tool again.
 
 ---
 
