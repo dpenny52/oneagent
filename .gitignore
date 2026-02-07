@@ -13,3 +13,4 @@ yarn-debug.log*
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+DEPLOY_TASKS.md
