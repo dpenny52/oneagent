@@ -60,6 +60,23 @@ defmodule OneAgent.AgentsTest do
       assert {:error, changeset} = Agents.create_agent(scope, attrs)
       assert %{model_provider: _} = errors_on(changeset)
     end
+
+    test "fails with description exceeding max length", %{scope: scope} do
+      attrs = valid_agent_attributes(%{"description" => String.duplicate("a", 10_001)})
+      assert {:error, changeset} = Agents.create_agent(scope, attrs)
+      assert %{description: ["should be at most 10000 character(s)"]} = errors_on(changeset)
+    end
+
+    test "fails with model_id exceeding max length", %{scope: scope} do
+      attrs = valid_agent_attributes(%{"model_id" => String.duplicate("a", 256)})
+      assert {:error, changeset} = Agents.create_agent(scope, attrs)
+      assert %{model_id: ["should be at most 255 character(s)"]} = errors_on(changeset)
+    end
+
+    test "accepts description at max length", %{scope: scope} do
+      attrs = valid_agent_attributes(%{"description" => String.duplicate("a", 10_000)})
+      assert {:ok, %Agent{}} = Agents.create_agent(scope, attrs)
+    end
   end
 
   describe "update_agent/2" do
