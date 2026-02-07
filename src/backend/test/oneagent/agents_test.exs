@@ -336,5 +336,35 @@ defmodule OneAgent.AgentsTest do
       assert {:ok, updated} = Agents.update_schedule_last_run(schedule)
       assert updated.last_run_at != nil
     end
+
+    test "create_schedule rejects message exceeding max length", %{scope: scope} do
+      agent = agent_fixture(scope)
+      long_message = String.duplicate("a", 1001)
+
+      assert {:error, changeset} =
+        Agents.create_schedule(agent, %{"cron" => "*/5 * * * *", "message" => long_message})
+
+      assert %{message: ["should be at most 1000 character(s)"]} = errors_on(changeset)
+    end
+
+    test "create_schedule rejects cron exceeding max length", %{scope: scope} do
+      agent = agent_fixture(scope)
+      long_cron = String.duplicate("* ", 128)
+
+      assert {:error, changeset} =
+        Agents.create_schedule(agent, %{"cron" => long_cron})
+
+      assert %{cron: _} = errors_on(changeset)
+    end
+
+    test "create_schedule accepts message at max length", %{scope: scope} do
+      agent = agent_fixture(scope)
+      max_message = String.duplicate("a", 1000)
+
+      assert {:ok, schedule} =
+        Agents.create_schedule(agent, %{"cron" => "*/5 * * * *", "message" => max_message})
+
+      assert schedule.message == max_message
+    end
   end
 end

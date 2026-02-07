@@ -238,6 +238,17 @@ defmodule OneAgentWeb.AgentControllerTest do
 
       assert json_response(conn, 404)
     end
+
+    test "rejects schedule with oversized message", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      conn = post(conn, "/api/agents/#{agent.id}/schedules", %{
+        "schedule" => %{"cron" => "0 * * * *", "message" => String.duplicate("a", 1001)}
+      })
+
+      assert %{"errors" => %{"message" => _}} = json_response(conn, 422)
+    end
   end
 
   describe "PUT /api/agents/:agent_id/schedules/:id" do

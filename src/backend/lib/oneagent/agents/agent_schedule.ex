@@ -22,6 +22,8 @@ defmodule OneAgent.Agents.AgentSchedule do
     schedule
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
+    |> validate_length(:cron, max: 255)
+    |> validate_length(:message, max: 1000)
     |> validate_cron()
     |> foreign_key_constraint(:agent_id)
   end
