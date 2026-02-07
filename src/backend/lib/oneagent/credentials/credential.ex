@@ -37,18 +37,11 @@ defmodule OneAgent.Credentials.Credential do
     credential
     |> cast(attrs, [:name, :service, :credential_type, :value, :metadata, :expires_at])
     |> validate_inclusion(:credential_type, @valid_types)
-    |> maybe_encrypt_value()
+    |> encrypt_value()
     |> unique_constraint([:user_id, :name])
   end
 
   defp encrypt_value(changeset) do
-    case get_change(changeset, :value) do
-      nil -> changeset
-      value -> put_change(changeset, :encrypted_value, value)
-    end
-  end
-
-  defp maybe_encrypt_value(changeset) do
     case get_change(changeset, :value) do
       nil -> changeset
       value -> put_change(changeset, :encrypted_value, value)

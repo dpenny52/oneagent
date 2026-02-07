@@ -33,18 +33,11 @@ defmodule OneAgent.Credentials.LlmConfig do
     config
     |> cast(attrs, [:provider, :api_key, :label, :is_default])
     |> validate_inclusion(:provider, @valid_providers)
-    |> maybe_encrypt_api_key()
+    |> encrypt_api_key()
     |> unique_constraint([:user_id, :label])
   end
 
   defp encrypt_api_key(changeset) do
-    case get_change(changeset, :api_key) do
-      nil -> changeset
-      key -> put_change(changeset, :encrypted_api_key, key)
-    end
-  end
-
-  defp maybe_encrypt_api_key(changeset) do
     case get_change(changeset, :api_key) do
       nil -> changeset
       key -> put_change(changeset, :encrypted_api_key, key)

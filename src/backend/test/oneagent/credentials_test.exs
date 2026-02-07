@@ -51,6 +51,23 @@ defmodule OneAgent.CredentialsTest do
       assert {:ok, updated} = Credentials.update_credential(cred, %{"name" => "updated-name"})
       assert updated.name == "updated-name"
     end
+
+    test "updates encrypted value when new value provided", %{scope: scope} do
+      cred = credential_fixture(scope, %{"value" => "original-secret"})
+      assert {:ok, updated} = Credentials.update_credential(cred, %{"value" => "new-secret"})
+
+      {:ok, reloaded} = Credentials.get_credential(scope, updated.id)
+      assert Credentials.decrypt_credential(reloaded) == "new-secret"
+    end
+
+    test "preserves encrypted value when no new value provided", %{scope: scope} do
+      cred = credential_fixture(scope, %{"value" => "original-secret"})
+      assert {:ok, updated} = Credentials.update_credential(cred, %{"name" => "renamed"})
+
+      {:ok, reloaded} = Credentials.get_credential(scope, updated.id)
+      assert reloaded.name == "renamed"
+      assert Credentials.decrypt_credential(reloaded) == "original-secret"
+    end
   end
 
   describe "delete_credential/1" do
@@ -95,6 +112,25 @@ defmodule OneAgent.CredentialsTest do
       attrs = valid_llm_config_attributes(%{"provider" => "invalid"})
       assert {:error, changeset} = Credentials.create_llm_config(scope, attrs)
       assert %{provider: _} = errors_on(changeset)
+    end
+  end
+
+  describe "update_llm_config/2" do
+    test "updates encrypted api_key when new key provided", %{scope: scope} do
+      config = llm_config_fixture(scope, %{"api_key" => "sk-ant-original"})
+      assert {:ok, updated} = Credentials.update_llm_config(config, %{"api_key" => "sk-ant-new"})
+
+      {:ok, reloaded} = Credentials.get_llm_config(scope, updated.id)
+      assert Credentials.decrypt_api_key(reloaded) == "sk-ant-new"
+    end
+
+    test "preserves encrypted api_key when no new key provided", %{scope: scope} do
+      config = llm_config_fixture(scope, %{"api_key" => "sk-ant-original"})
+      assert {:ok, updated} = Credentials.update_llm_config(config, %{"label" => "renamed"})
+
+      {:ok, reloaded} = Credentials.get_llm_config(scope, updated.id)
+      assert reloaded.label == "renamed"
+      assert Credentials.decrypt_api_key(reloaded) == "sk-ant-original"
     end
   end
 
