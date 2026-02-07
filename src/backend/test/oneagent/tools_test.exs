@@ -484,6 +484,45 @@ defmodule OneAgent.ToolsTest do
       assert {:ok, result} = Tools.execute_tool("recall_memory", %{}, context)
       assert result["count"] == 2
     end
+
+    test "recall treats empty string key as list-all", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil}
+
+      Tools.execute_tool("store_memory", %{
+        "key" => "k1", "value" => %{"a" => 1}, "memory_type" => "fact"
+      }, context)
+
+      assert {:ok, result} = Tools.execute_tool("recall_memory", %{"key" => ""}, context)
+      assert result["count"] == 1
+      assert is_list(result["memories"])
+    end
+
+    test "recall treats whitespace-only key as list-all", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil}
+
+      Tools.execute_tool("store_memory", %{
+        "key" => "k1", "value" => %{"x" => true}, "memory_type" => "fact"
+      }, context)
+
+      assert {:ok, result} = Tools.execute_tool("recall_memory", %{"key" => "  \t  "}, context)
+      assert result["count"] == 1
+      assert is_list(result["memories"])
+    end
+
+    test "recall trims whitespace from key before lookup", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil}
+
+      Tools.execute_tool("store_memory", %{
+        "key" => "test_key", "value" => %{"v" => 1}, "memory_type" => "fact"
+      }, context)
+
+      assert {:ok, result} = Tools.execute_tool("recall_memory", %{"key" => "  test_key  "}, context)
+      assert result["found"] == true
+      assert result["key"] == "test_key"
+    end
   end
 
   describe "list_schedules tool" do

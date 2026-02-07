@@ -40,8 +40,9 @@ defmodule OneAgent.Tools.RecallMemory do
   @impl true
   def execute(input, context) do
     agent = context[:agent]
+    key = normalize_key(input["key"])
 
-    case input["key"] do
+    case key do
       nil ->
         memories = OneAgent.Agents.list_memories(agent)
         items = Enum.map(memories, fn m ->
@@ -56,4 +57,14 @@ defmodule OneAgent.Tools.RecallMemory do
         end
     end
   end
+
+  # Treat empty/whitespace-only strings as nil (list all memories)
+  defp normalize_key(nil), do: nil
+  defp normalize_key(key) when is_binary(key) do
+    case String.trim(key) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+  defp normalize_key(_), do: nil
 end
