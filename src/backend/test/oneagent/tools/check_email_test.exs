@@ -58,6 +58,42 @@ defmodule OneAgent.Tools.CheckEmailTest do
     end
   end
 
+  describe "valid_message_id?/1" do
+    test "accepts valid alphanumeric Gmail message IDs" do
+      assert CheckEmail.valid_message_id?("18f3a2b4c5d6e7f8")
+      assert CheckEmail.valid_message_id?("abc123")
+      assert CheckEmail.valid_message_id?("ABCDEF0123456789")
+    end
+
+    test "rejects path traversal attempts" do
+      refute CheckEmail.valid_message_id?("../../../users/me/settings")
+      refute CheckEmail.valid_message_id?("abc/../def")
+      refute CheckEmail.valid_message_id?("..%2F..%2Fsettings")
+    end
+
+    test "rejects IDs with slashes" do
+      refute CheckEmail.valid_message_id?("abc/def")
+      refute CheckEmail.valid_message_id?("/messages/123")
+    end
+
+    test "rejects IDs with special characters" do
+      refute CheckEmail.valid_message_id?("abc def")
+      refute CheckEmail.valid_message_id?("abc?query=1")
+      refute CheckEmail.valid_message_id?("abc&param=2")
+      refute CheckEmail.valid_message_id?("abc#fragment")
+    end
+
+    test "rejects empty string" do
+      refute CheckEmail.valid_message_id?("")
+    end
+
+    test "rejects non-string values" do
+      refute CheckEmail.valid_message_id?(nil)
+      refute CheckEmail.valid_message_id?(123)
+      refute CheckEmail.valid_message_id?(%{})
+    end
+  end
+
   describe "extract_body/1" do
     test "decodes URL-safe base64 text/plain body from parts" do
       body_data = Base.url_encode64("Hello, world!", padding: false)

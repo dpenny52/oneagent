@@ -9,6 +9,8 @@ defmodule OneAgent.Tools.CheckEmail do
   @gmail_api "https://gmail.googleapis.com/gmail/v1/users/me"
   @token_url "https://oauth2.googleapis.com/token"
   @max_body_bytes 10_000
+  # Gmail message IDs are alphanumeric hex strings (e.g. "18f3a2b4c5d6e7f8")
+  @message_id_regex ~r/^[a-zA-Z0-9]+$/
 
   @impl true
   def id, do: "check_email"
@@ -147,25 +149,35 @@ defmodule OneAgent.Tools.CheckEmail do
     end
   end
 
+  defp fetch_message_metadata(_access_token, message_id) when not is_binary(message_id), do: nil
+
   defp fetch_message_metadata(access_token, message_id) do
-    case gmail_get("/messages/#{message_id}", access_token, format: "metadata", metadataHeaders: "From,To,Subject,Date") do
-      {:ok, msg} ->
-        headers = parse_headers(msg["payload"]["headers"] || [])
+    if not valid_message_id?(message_id) do
+      nil
+    else
+      case gmail_get("/messages/#{message_id}", access_token, format: "metadata", metadataHeaders: "From,To,Subject,Date") do
+        {:ok, msg} ->
+          headers = parse_headers(msg["payload"]["headers"] || [])
 
-        %{
-          "id" => msg["id"],
-          "thread_id" => msg["threadId"],
-          "subject" => headers["Subject"],
-          "from" => headers["From"],
-          "to" => headers["To"],
-          "date" => headers["Date"],
-          "snippet" => msg["snippet"]
-        }
+          %{
+            "id" => msg["id"],
+            "thread_id" => msg["threadId"],
+            "subject" => headers["Subject"],
+            "from" => headers["From"],
+            "to" => headers["To"],
+            "date" => headers["Date"],
+            "snippet" => msg["snippet"]
+          }
 
-      _ ->
-        nil
+        _ ->
+          nil
+      end
     end
   end
+
+  @doc false
+  def valid_message_id?(id) when is_binary(id), do: Regex.match?(@message_id_regex, id)
+  def valid_message_id?(_), do: false
 
   defp read_email(access_token, input) do
     case input["message_id"] do
@@ -173,24 +185,28 @@ defmodule OneAgent.Tools.CheckEmail do
         {:error, "message_id is required for the 'read' action"}
 
       message_id ->
-        case gmail_get("/messages/#{message_id}", access_token, format: "full") do
-          {:ok, msg} ->
-            headers = parse_headers(msg["payload"]["headers"] || [])
-            body = extract_body(msg["payload"])
+        if not valid_message_id?(message_id) do
+          {:error, "Invalid message_id format"}
+        else
+          case gmail_get("/messages/#{message_id}", access_token, format: "full") do
+            {:ok, msg} ->
+              headers = parse_headers(msg["payload"]["headers"] || [])
+              body = extract_body(msg["payload"])
 
-            {:ok, %{
-              "id" => msg["id"],
-              "thread_id" => msg["threadId"],
-              "subject" => headers["Subject"],
-              "from" => headers["From"],
-              "to" => headers["To"],
-              "date" => headers["Date"],
-              "snippet" => msg["snippet"],
-              "body" => truncate(body, @max_body_bytes)
-            }}
+              {:ok, %{
+                "id" => msg["id"],
+                "thread_id" => msg["threadId"],
+                "subject" => headers["Subject"],
+                "from" => headers["From"],
+                "to" => headers["To"],
+                "date" => headers["Date"],
+                "snippet" => msg["snippet"],
+                "body" => truncate(body, @max_body_bytes)
+              }}
 
-          {:error, reason} ->
-            {:error, reason}
+            {:error, reason} ->
+              {:error, reason}
+          end
         end
     end
   end
