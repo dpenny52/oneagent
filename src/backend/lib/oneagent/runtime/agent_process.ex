@@ -63,6 +63,7 @@ defmodule OneAgent.Runtime.AgentProcess do
 
   defp do_run(state, message, trigger) do
     agent = state.agent
+    source = trigger_to_source(trigger)
 
     # Create run record
     {:ok, run} = Agents.create_run(agent, %{trigger: trigger})
@@ -87,11 +88,11 @@ defmodule OneAgent.Runtime.AgentProcess do
     case agentic_loop(state, run, messages, tool_defs, system, 0, []) do
       {:ok, final_text, run} ->
         # Persist user message and assistant response to chat history
-        case Agents.create_message(agent, %{role: "user", content: message, run_id: run.id}) do
+        case Agents.create_message(agent, %{role: "user", content: message, run_id: run.id, source: source}) do
           {:ok, _} -> :ok
           {:error, cs} -> Logger.warning("Failed to save user message: #{inspect(cs.errors)}")
         end
-        case Agents.create_message(agent, %{role: "assistant", content: final_text, run_id: run.id}) do
+        case Agents.create_message(agent, %{role: "assistant", content: final_text, run_id: run.id, source: source}) do
           {:ok, _} -> :ok
           {:error, cs} -> Logger.warning("Failed to save assistant message: #{inspect(cs.errors)}")
         end
@@ -99,7 +100,7 @@ defmodule OneAgent.Runtime.AgentProcess do
 
       {:error, reason, run} ->
         # Persist user message even on error so context isn't lost
-        Agents.create_message(agent, %{role: "user", content: message, run_id: run.id})
+        Agents.create_message(agent, %{role: "user", content: message, run_id: run.id, source: source})
         Agents.fail_run(run, reason)
         {:error, reason}
     end
@@ -336,6 +337,11 @@ defmodule OneAgent.Runtime.AgentProcess do
     - Cron format: "minute hour day-of-month month day-of-week" (e.g. "*/5 * * * *" = every 5 minutes, "0 9 * * 1-5" = weekdays at 9am).
     - IMPORTANT: After a manage_schedule call succeeds, immediately respond with a text message confirming the action. \
     Never call manage_schedule again after a successful result — one call per action is all you need.
+
+    ## Scheduled Execution Context
+    - When you run on a schedule, your messages are NOT stored in conversation history.
+    - If you discover important information during a scheduled run, use store_memory to save it.
+    - Your stored memories persist across all runs and are always available above.
     """
 
     agent.system_prompt <> context_section <> memory_section <> schedule_section
@@ -354,6 +360,11 @@ defmodule OneAgent.Runtime.AgentProcess do
     end)
     |> Kernel.||("")
   end
+
+  defp trigger_to_source("manual"), do: "chat"
+  defp trigger_to_source("webhook"), do: "webhook"
+  defp trigger_to_source("scheduled"), do: "scheduled"
+  defp trigger_to_source(_), do: "chat"
 
   defp resolve_api_key(agent) do
     case agent.llm_config do

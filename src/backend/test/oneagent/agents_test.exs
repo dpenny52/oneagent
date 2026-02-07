@@ -311,6 +311,61 @@ defmodule OneAgent.AgentsTest do
     end
   end
 
+  # ── Messages (Chat History) ────────────────────────────────
+
+  describe "messages" do
+    test "create_message defaults source to chat", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, msg} = Agents.create_message(agent, %{role: "user", content: "hello"})
+      assert msg.source == "chat"
+    end
+
+    test "create_message stores explicit source", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, msg} = Agents.create_message(agent, %{role: "user", content: "hello", source: "scheduled"})
+      assert msg.source == "scheduled"
+    end
+
+    test "create_message rejects invalid source", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:error, changeset} = Agents.create_message(agent, %{role: "user", content: "hello", source: "invalid"})
+      assert %{source: _} = errors_on(changeset)
+    end
+
+    test "list_recent_messages excludes scheduled by default", %{scope: scope} do
+      agent = agent_fixture(scope)
+      _chat = message_fixture(agent, %{role: "user", content: "chat msg", source: "chat"})
+      _webhook = message_fixture(agent, %{role: "user", content: "webhook msg", source: "webhook"})
+      _scheduled = message_fixture(agent, %{role: "user", content: "scheduled msg", source: "scheduled"})
+
+      messages = Agents.list_recent_messages(agent)
+      sources = Enum.map(messages, & &1.source)
+      assert "chat" in sources
+      assert "webhook" in sources
+      refute "scheduled" in sources
+      assert length(messages) == 2
+    end
+
+    test "list_recent_messages with exclude_sources: [] returns all", %{scope: scope} do
+      agent = agent_fixture(scope)
+      _chat = message_fixture(agent, %{role: "user", content: "chat msg", source: "chat"})
+      _scheduled = message_fixture(agent, %{role: "user", content: "scheduled msg", source: "scheduled"})
+
+      messages = Agents.list_recent_messages(agent, exclude_sources: [])
+      assert length(messages) == 2
+    end
+
+    test "delete_all_messages clears all sources", %{scope: scope} do
+      agent = agent_fixture(scope)
+      _chat = message_fixture(agent, %{role: "user", content: "chat msg", source: "chat"})
+      _scheduled = message_fixture(agent, %{role: "user", content: "scheduled msg", source: "scheduled"})
+
+      Agents.delete_all_messages(agent)
+      messages = Agents.list_recent_messages(agent, exclude_sources: [])
+      assert messages == []
+    end
+  end
+
   # ── Schedules ──────────────────────────────────────────────
 
   describe "schedules" do

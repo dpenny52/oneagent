@@ -46,6 +46,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   sequence: number;
+  source?: string;
   inserted_at: string;
 }
 

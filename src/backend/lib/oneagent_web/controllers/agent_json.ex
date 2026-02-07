@@ -130,6 +130,7 @@ defmodule OneAgentWeb.AgentJSON do
       role: message.role,
       content: message.content,
       sequence: message.sequence,
+      source: message.source,
       run_id: message.run_id,
       inserted_at: message.inserted_at
     }

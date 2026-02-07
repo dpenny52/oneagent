@@ -76,6 +76,16 @@ defmodule OneAgent.AgentsFixtures do
     schedule
   end
 
+  def message_fixture(agent, attrs \\ %{}) do
+    attrs = Map.merge(%{
+      role: "user",
+      content: "test message #{System.unique_integer([:positive])}"
+    }, attrs)
+
+    {:ok, message} = Agents.create_message(agent, attrs)
+    message
+  end
+
   def scope_fixture do
     user = AccountsFixtures.confirmed_user_fixture()
     OneAgent.Accounts.Scope.for_user(user)

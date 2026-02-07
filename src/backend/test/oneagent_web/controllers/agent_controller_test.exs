@@ -276,6 +276,31 @@ defmodule OneAgentWeb.AgentControllerTest do
     end
   end
 
+  # ── Messages ─────────────────────────────────────────────────
+
+  describe "GET /api/agents/:agent_id/messages" do
+    test "excludes scheduled messages", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+      _chat = message_fixture(agent, %{role: "user", content: "chat msg", source: "chat"})
+      _scheduled = message_fixture(agent, %{role: "assistant", content: "scheduled msg", source: "scheduled"})
+
+      conn = get(conn, "/api/agents/#{agent.id}/messages")
+      assert %{"data" => messages} = json_response(conn, 200)
+      assert length(messages) == 1
+      assert hd(messages)["content"] == "chat msg"
+    end
+
+    test "includes source field in response", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+      _msg = message_fixture(agent, %{role: "user", content: "hello", source: "webhook"})
+
+      conn = get(conn, "/api/agents/#{agent.id}/messages")
+      assert %{"data" => [%{"source" => "webhook"}]} = json_response(conn, 200)
+    end
+  end
+
   # ── Invoke (input validation) ───────────────────────────────
 
   describe "POST /api/agents/:agent_id/invoke" do

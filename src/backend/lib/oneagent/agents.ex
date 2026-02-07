@@ -225,12 +225,14 @@ defmodule OneAgent.Agents do
 
   # ── Messages (Chat History) ────────────────────────────────
 
-  def list_recent_messages(%Agent{} = agent, limit \\ nil) do
-    limit = limit || agent.max_history_messages
+  def list_recent_messages(%Agent{} = agent, opts \\ []) do
+    limit = Keyword.get(opts, :limit) || agent.max_history_messages
+    exclude_sources = Keyword.get(opts, :exclude_sources, ["scheduled"])
 
     subquery =
       from m in AgentMessage,
         where: m.agent_id == ^agent.id,
+        where: m.source not in ^exclude_sources,
         order_by: [desc: m.sequence],
         limit: ^limit
 
