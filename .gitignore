@@ -14,3 +14,5 @@ yarn-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 DEPLOY_TASKS.md
+ralph.sh
+.ralph-loop.log

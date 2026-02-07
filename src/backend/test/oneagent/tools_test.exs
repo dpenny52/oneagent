@@ -158,6 +158,102 @@ defmodule OneAgent.ToolsTest do
     end
   end
 
+  describe "http_request method validation" do
+    test "returns error for invalid HTTP method instead of crashing", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "web_access"})
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "data_write"})
+      context = %{agent: agent}
+
+      assert {:error, msg} =
+               Tools.execute_tool("http_request", %{"method" => "FOOBAR", "url" => "https://example.com"}, context)
+
+      assert msg =~ "Invalid HTTP method"
+      assert msg =~ "FOOBAR"
+    end
+
+    test "returns error for nil HTTP method", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "data_write"})
+      context = %{agent: agent}
+
+      assert {:error, msg} =
+               Tools.execute_tool("http_request", %{"method" => nil, "url" => "https://example.com"}, context)
+
+      assert msg =~ "Invalid HTTP method"
+    end
+  end
+
+  describe "http_request SSRF protection" do
+    test "blocks requests to private IPs", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "web_access"})
+      context = %{agent: agent}
+
+      assert {:error, msg} =
+               Tools.execute_tool("http_request", %{"method" => "GET", "url" => "http://169.254.169.254/latest/meta-data/"}, context)
+
+      assert msg =~ "private"
+    end
+
+    test "blocks requests to localhost", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "web_access"})
+      context = %{agent: agent}
+
+      assert {:error, msg} =
+               Tools.execute_tool("http_request", %{"method" => "GET", "url" => "http://localhost/admin"}, context)
+
+      assert msg =~ "not allowed"
+    end
+
+    test "blocks non-http schemes", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "web_access"})
+      context = %{agent: agent}
+
+      assert {:error, msg} =
+               Tools.execute_tool("http_request", %{"method" => "GET", "url" => "file:///etc/passwd"}, context)
+
+      assert msg =~ "http or https"
+    end
+  end
+
+  describe "read_webpage SSRF protection" do
+    test "blocks requests to private IPs", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "web_access"})
+      context = %{agent: agent}
+
+      assert {:error, msg} =
+               Tools.execute_tool("read_webpage", %{"url" => "http://10.0.0.1/internal"}, context)
+
+      assert msg =~ "private"
+    end
+
+    test "blocks requests to metadata endpoints", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "web_access"})
+      context = %{agent: agent}
+
+      assert {:error, msg} =
+               Tools.execute_tool("read_webpage", %{"url" => "http://metadata.google.internal/computeMetadata/v1/"}, context)
+
+      assert msg =~ "not allowed"
+    end
+
+    test "blocks non-http schemes", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "web_access"})
+      context = %{agent: agent}
+
+      assert {:error, msg} =
+               Tools.execute_tool("read_webpage", %{"url" => "ftp://internal.corp/data"}, context)
+
+      assert msg =~ "http or https"
+    end
+  end
+
   describe "store_memory and recall_memory tools" do
     test "store and recall round-trip", %{scope: scope} do
       agent = agent_fixture(scope)

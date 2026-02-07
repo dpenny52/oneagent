@@ -40,17 +40,25 @@ defmodule OneAgent.Tools.ReadWebpage do
   def execute(input, _context) do
     url = input["url"]
 
-    case Req.get(url, headers: [{"user-agent", "OneAgent/1.0"}]) do
-      {:ok, %Req.Response{status: status, body: body}} when status in 200..299 ->
-        text = extract_text(body)
-        {:ok, %{"url" => url, "text" => truncate(text, 30_000), "status" => status}}
-
-      {:ok, %Req.Response{status: status}} ->
-        {:error, "Failed to fetch URL: HTTP #{status}"}
+    with :ok <- OneAgent.Tools.UrlValidator.validate(url),
+         {:ok, resp} <- Req.get(url, headers: [{"user-agent", "OneAgent/1.0"}]) do
+      handle_response(url, resp)
+    else
+      {:error, reason} when is_binary(reason) ->
+        {:error, reason}
 
       {:error, reason} ->
         {:error, "Failed to fetch URL: #{inspect(reason)}"}
     end
+  end
+
+  defp handle_response(url, %Req.Response{status: status, body: body}) when status in 200..299 do
+    text = extract_text(body)
+    {:ok, %{"url" => url, "text" => truncate(text, 30_000), "status" => status}}
+  end
+
+  defp handle_response(_url, %Req.Response{status: status}) do
+    {:error, "Failed to fetch URL: HTTP #{status}"}
   end
 
   defp extract_text(body) when is_binary(body) do

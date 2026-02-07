@@ -6,6 +6,8 @@ defmodule OneAgent.Tools.HttpRequest do
 
   @behaviour OneAgent.Tools.Tool
 
+  @valid_methods ~w(get head post put patch delete)
+
   @impl true
   def id, do: "http_request"
 
@@ -56,7 +58,21 @@ defmodule OneAgent.Tools.HttpRequest do
 
   @impl true
   def execute(input, context) do
-    method = input["method"] |> String.downcase() |> String.to_existing_atom()
+    method_str = String.downcase(input["method"] || "")
+
+    with true <- method_str in @valid_methods,
+         :ok <- OneAgent.Tools.UrlValidator.validate(input["url"]) do
+      do_request(String.to_existing_atom(method_str), input, context)
+    else
+      false ->
+        {:error, "Invalid HTTP method: #{input["method"]}. Must be one of: GET, HEAD, POST, PUT, PATCH, DELETE"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp do_request(method, input, context) do
     url = input["url"]
     headers = build_headers(input["headers"] || %{}, context)
     body = input["body"]

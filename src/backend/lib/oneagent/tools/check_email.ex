@@ -221,7 +221,8 @@ defmodule OneAgent.Tools.CheckEmail do
     Enum.into(headers, %{}, fn %{"name" => name, "value" => value} -> {name, value} end)
   end
 
-  defp extract_body(%{"parts" => parts}) when is_list(parts) do
+  @doc false
+  def extract_body(%{"parts" => parts}) when is_list(parts) do
     # Prefer text/plain, fall back to text/html
     plain = Enum.find(parts, fn p -> p["mimeType"] == "text/plain" end)
     html = Enum.find(parts, fn p -> p["mimeType"] == "text/html" end)
@@ -236,22 +237,20 @@ defmodule OneAgent.Tools.CheckEmail do
     end
   end
 
-  defp extract_body(%{"body" => %{"data" => data}}) when is_binary(data) do
+  def extract_body(%{"body" => %{"data" => data}}) when is_binary(data) do
     decode_body_data(data)
   end
 
-  defp extract_body(_), do: ""
+  def extract_body(_), do: ""
 
   defp decode_body_data(nil), do: ""
 
   defp decode_body_data(data) do
-    # Gmail uses URL-safe base64
-    data
-    |> String.replace("-", "+")
-    |> String.replace("_", "/")
-    |> Base.decode64!(padding: false)
-  rescue
-    _ -> ""
+    # Gmail uses URL-safe base64 (RFC 4648 §5)
+    case Base.url_decode64(data, padding: false) do
+      {:ok, decoded} -> decoded
+      :error -> ""
+    end
   end
 
   defp truncate(text, max_bytes) when byte_size(text) > max_bytes do

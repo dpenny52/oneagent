@@ -28,7 +28,10 @@ defmodule OneAgent.LLM.OpenAI do
       {"content-type", "application/json"}
     ]
 
-    case Req.post(@api_url, json: body, headers: headers, receive_timeout: 120_000) do
+    req_opts = Keyword.get(opts, :plug)
+    extra = if req_opts, do: [plug: req_opts], else: []
+
+    case Req.post(@api_url, [json: body, headers: headers, receive_timeout: 120_000] ++ extra) do
       {:ok, %Req.Response{status: 200, body: resp}} ->
         {:ok, parse_response(resp)}
 
@@ -113,11 +116,19 @@ defmodule OneAgent.LLM.OpenAI do
     tool_blocks =
       (message["tool_calls"] || [])
       |> Enum.map(fn tc ->
+        args = get_in(tc, ["function", "arguments"]) || "{}"
+
+        input =
+          case Jason.decode(args) do
+            {:ok, parsed} -> parsed
+            {:error, _} -> %{"_raw" => args, "_parse_error" => true}
+          end
+
         %{
           type: :tool_use,
           id: tc["id"],
           name: get_in(tc, ["function", "name"]),
-          input: tc |> get_in(["function", "arguments"]) |> Jason.decode!()
+          input: input
         }
       end)
 
