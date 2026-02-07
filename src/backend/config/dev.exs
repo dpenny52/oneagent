@@ -65,7 +65,7 @@ config :phoenix, :plug_init_mode, :runtime
 # Use Resend for real email delivery in dev
 config :oneagent, OneAgent.Mailer,
   adapter: Swoosh.Adapters.Resend,
-  api_key: "re_HuGKzmoJ_PGzJmJzVjDWG1eZbaF9EZw93"
+  api_key: System.get_env("RESEND_API_KEY", "")
 
 config :swoosh, :api_client, Swoosh.ApiClient.Finch
 
