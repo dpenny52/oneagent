@@ -47,9 +47,14 @@ defmodule OneAgent.Tools.SendEmail do
   # Same pattern used in User.validate_email — no spaces, commas, or semicolons
   @email_regex ~r/^[^@,;\s]+@[^@,;\s]+$/
 
+  @max_subject_length 998
+  @max_body_length 100_000
+
   @impl true
   def execute(input, context) do
     to = input["to"]
+    subject = input["subject"]
+    body = input["body"]
 
     cond do
       !is_binary(to) or to == "" ->
@@ -60,6 +65,18 @@ defmodule OneAgent.Tools.SendEmail do
 
       not Regex.match?(@email_regex, to) ->
         {:error, "Invalid recipient email: must be a valid email address with no spaces, commas, or semicolons"}
+
+      !is_binary(subject) or String.trim(subject) == "" ->
+        {:error, "Missing required parameter: subject (email subject line)"}
+
+      String.length(subject) > @max_subject_length ->
+        {:error, "Subject too long (max #{@max_subject_length} characters)"}
+
+      !is_binary(body) or String.trim(body) == "" ->
+        {:error, "Missing required parameter: body (email body text)"}
+
+      String.length(body) > @max_body_length ->
+        {:error, "Body too long (max #{@max_body_length} characters)"}
 
       true ->
         do_send(input, context)

@@ -348,6 +348,106 @@ defmodule OneAgent.ToolsTest do
     end
   end
 
+  describe "send_email subject and body validation" do
+    setup %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "email"})
+      %{agent: agent, context: %{agent: agent}}
+    end
+
+    test "rejects missing subject", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "user@example.com", "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "Missing required parameter: subject"
+    end
+
+    test "rejects empty subject", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "user@example.com", "subject" => "", "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "Missing required parameter: subject"
+    end
+
+    test "rejects whitespace-only subject", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "user@example.com", "subject" => "   ", "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "Missing required parameter: subject"
+    end
+
+    test "rejects subject exceeding 998 characters", %{context: context} do
+      long_subject = String.duplicate("a", 999)
+
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "user@example.com", "subject" => long_subject, "body" => "Hello"},
+                 context
+               )
+
+      assert msg =~ "Subject too long"
+    end
+
+    test "rejects missing body", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "user@example.com", "subject" => "Hi"},
+                 context
+               )
+
+      assert msg =~ "Missing required parameter: body"
+    end
+
+    test "rejects empty body", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "user@example.com", "subject" => "Hi", "body" => ""},
+                 context
+               )
+
+      assert msg =~ "Missing required parameter: body"
+    end
+
+    test "rejects whitespace-only body", %{context: context} do
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "user@example.com", "subject" => "Hi", "body" => "  \n  "},
+                 context
+               )
+
+      assert msg =~ "Missing required parameter: body"
+    end
+
+    test "rejects body exceeding 100,000 characters", %{context: context} do
+      long_body = String.duplicate("a", 100_001)
+
+      assert {:error, msg} =
+               Tools.execute_tool(
+                 "send_email",
+                 %{"to" => "user@example.com", "subject" => "Hi", "body" => long_body},
+                 context
+               )
+
+      assert msg =~ "Body too long"
+    end
+  end
+
   describe "store_memory and recall_memory tools" do
     test "store and recall round-trip", %{scope: scope} do
       agent = agent_fixture(scope)
