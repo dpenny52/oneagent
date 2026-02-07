@@ -7,6 +7,7 @@ defmodule OneAgent.Tools.HttpRequest do
   @behaviour OneAgent.Tools.Tool
 
   @valid_methods ~w(get head post put patch delete)
+  @request_timeout 30_000
 
   @impl true
   def id, do: "http_request"
@@ -77,7 +78,7 @@ defmodule OneAgent.Tools.HttpRequest do
     headers = build_headers(input["headers"] || %{}, context)
     body = input["body"]
 
-    opts = [headers: headers]
+    opts = [headers: headers, receive_timeout: @request_timeout]
     opts = if body, do: Keyword.put(opts, :body, body), else: opts
 
     case Req.request([method: method, url: url] ++ opts) do

@@ -5,6 +5,8 @@ defmodule OneAgent.Tools.ReadWebpage do
 
   @behaviour OneAgent.Tools.Tool
 
+  @request_timeout 30_000
+
   @impl true
   def id, do: "read_webpage"
 
@@ -41,7 +43,7 @@ defmodule OneAgent.Tools.ReadWebpage do
     url = input["url"]
 
     with :ok <- OneAgent.Tools.UrlValidator.validate(url),
-         {:ok, resp} <- Req.get(url, headers: [{"user-agent", "OneAgent/1.0"}]) do
+         {:ok, resp} <- Req.get(url, headers: [{"user-agent", "OneAgent/1.0"}], receive_timeout: @request_timeout) do
       handle_response(url, resp)
     else
       {:error, reason} when is_binary(reason) ->
