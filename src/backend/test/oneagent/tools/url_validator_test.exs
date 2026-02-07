@@ -100,5 +100,65 @@ defmodule OneAgent.Tools.UrlValidatorTest do
       assert {:error, msg} = UrlValidator.validate(123)
       assert msg =~ "string"
     end
+
+    # IPv6 SSRF bypass vectors
+
+    test "rejects IPv6-mapped loopback (::ffff:127.0.0.1)" do
+      assert {:error, msg} = UrlValidator.validate("http://[::ffff:127.0.0.1]/api")
+      assert msg =~ "private"
+    end
+
+    test "rejects IPv6-mapped private 10.x (::ffff:10.0.0.1)" do
+      assert {:error, msg} = UrlValidator.validate("http://[::ffff:10.0.0.1]")
+      assert msg =~ "private"
+    end
+
+    test "rejects IPv6-mapped private 172.16.x (::ffff:172.16.0.1)" do
+      assert {:error, msg} = UrlValidator.validate("http://[::ffff:172.16.0.1]")
+      assert msg =~ "private"
+    end
+
+    test "rejects IPv6-mapped private 192.168.x (::ffff:192.168.1.1)" do
+      assert {:error, msg} = UrlValidator.validate("http://[::ffff:192.168.1.1]")
+      assert msg =~ "private"
+    end
+
+    test "rejects IPv6-mapped link-local metadata (::ffff:169.254.169.254)" do
+      assert {:error, msg} = UrlValidator.validate("http://[::ffff:169.254.169.254]/latest/meta-data/")
+      assert msg =~ "private"
+    end
+
+    test "rejects IPv6-mapped 0.0.0.0 (::ffff:0.0.0.0)" do
+      assert {:error, msg} = UrlValidator.validate("http://[::ffff:0.0.0.0]")
+      assert msg =~ "private"
+    end
+
+    test "accepts IPv6-mapped public IP (::ffff:8.8.8.8)" do
+      assert :ok = UrlValidator.validate("http://[::ffff:8.8.8.8]")
+    end
+
+    test "rejects IPv6 link-local (fe80::1)" do
+      assert {:error, msg} = UrlValidator.validate("http://[fe80::1]")
+      assert msg =~ "private"
+    end
+
+    test "rejects IPv6 unique-local (fc00::1)" do
+      assert {:error, msg} = UrlValidator.validate("http://[fc00::1]")
+      assert msg =~ "private"
+    end
+
+    test "rejects IPv6 unique-local (fd00::1)" do
+      assert {:error, msg} = UrlValidator.validate("http://[fd00::1]")
+      assert msg =~ "private"
+    end
+
+    test "rejects IPv6 loopback (::1)" do
+      assert {:error, msg} = UrlValidator.validate("http://[::1]")
+      assert msg =~ "private"
+    end
+
+    test "accepts public IPv6 address" do
+      assert :ok = UrlValidator.validate("http://[2607:f8b0:4004:800::200e]")
+    end
   end
 end
