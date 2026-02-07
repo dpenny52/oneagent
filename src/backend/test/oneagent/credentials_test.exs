@@ -68,6 +68,20 @@ defmodule OneAgent.CredentialsTest do
       assert reloaded.name == "renamed"
       assert Credentials.decrypt_credential(reloaded) == "original-secret"
     end
+
+    test "rejects name exceeding 255 characters", %{scope: scope} do
+      cred = credential_fixture(scope)
+      long_name = String.duplicate("a", 256)
+      assert {:error, changeset} = Credentials.update_credential(cred, %{"name" => long_name})
+      assert %{name: ["should be at most 255 character(s)"]} = errors_on(changeset)
+    end
+
+    test "rejects service exceeding 255 characters", %{scope: scope} do
+      cred = credential_fixture(scope)
+      long_service = String.duplicate("s", 256)
+      assert {:error, changeset} = Credentials.update_credential(cred, %{"service" => long_service})
+      assert %{service: ["should be at most 255 character(s)"]} = errors_on(changeset)
+    end
   end
 
   describe "delete_credential/1" do
@@ -132,6 +146,14 @@ defmodule OneAgent.CredentialsTest do
       assert reloaded.label == "renamed"
       assert Credentials.decrypt_api_key(reloaded) == "sk-ant-original"
     end
+
+    test "rejects label exceeding 255 characters", %{scope: scope} do
+      config = llm_config_fixture(scope)
+      long_label = String.duplicate("x", 256)
+      assert {:error, changeset} = Credentials.update_llm_config(config, %{"label" => long_label})
+      assert %{label: ["should be at most 255 character(s)"]} = errors_on(changeset)
+    end
+
   end
 
   describe "decrypt_api_key/1" do

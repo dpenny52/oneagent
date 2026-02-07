@@ -33,6 +33,7 @@ defmodule OneAgent.Credentials.LlmConfig do
     config
     |> cast(attrs, [:provider, :api_key, :label, :is_default])
     |> validate_inclusion(:provider, @valid_providers)
+    |> validate_length(:label, min: 1, max: 255)
     |> encrypt_api_key()
     |> unique_constraint([:user_id, :label])
   end

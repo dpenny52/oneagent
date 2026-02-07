@@ -37,6 +37,8 @@ defmodule OneAgent.Credentials.Credential do
     credential
     |> cast(attrs, [:name, :service, :credential_type, :value, :metadata, :expires_at])
     |> validate_inclusion(:credential_type, @valid_types)
+    |> validate_length(:name, min: 1, max: 255)
+    |> validate_length(:service, min: 1, max: 255)
     |> encrypt_value()
     |> unique_constraint([:user_id, :name])
   end
