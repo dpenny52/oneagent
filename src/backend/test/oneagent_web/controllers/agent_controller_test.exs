@@ -275,4 +275,53 @@ defmodule OneAgentWeb.AgentControllerTest do
       assert response(conn, 204)
     end
   end
+
+  # ── Invoke (input validation) ───────────────────────────────
+
+  describe "POST /api/agents/:agent_id/invoke" do
+    test "rejects null message", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      conn = post(conn, "/api/agents/#{agent.id}/invoke", %{"message" => nil})
+      assert %{"error" => "Message must be a non-empty string"} = json_response(conn, 422)
+    end
+
+    test "rejects non-string message", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      conn = post(conn, "/api/agents/#{agent.id}/invoke", %{"message" => 123})
+      assert %{"error" => "Message must be a non-empty string"} = json_response(conn, 422)
+    end
+
+    test "rejects empty string message", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      conn = post(conn, "/api/agents/#{agent.id}/invoke", %{"message" => ""})
+      assert %{"error" => "Message must not be blank"} = json_response(conn, 422)
+    end
+
+    test "rejects whitespace-only message", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      conn = post(conn, "/api/agents/#{agent.id}/invoke", %{"message" => "   \n\t  "})
+      assert %{"error" => "Message must not be blank"} = json_response(conn, 422)
+    end
+
+    test "rejects oversized message", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      conn = post(conn, "/api/agents/#{agent.id}/invoke", %{"message" => String.duplicate("a", 32_001)})
+      assert %{"error" => "Message exceeds maximum length of 32000 characters"} = json_response(conn, 422)
+    end
+
+    test "returns 404 for non-existent agent", %{conn: conn} do
+      conn = post(conn, "/api/agents/#{Ecto.UUID.generate()}/invoke", %{"message" => "hello"})
+      assert json_response(conn, 404)
+    end
+  end
 end

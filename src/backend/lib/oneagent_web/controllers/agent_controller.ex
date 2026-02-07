@@ -54,9 +54,7 @@ defmodule OneAgentWeb.AgentController do
   @max_message_length 32_000
 
   def invoke(conn, %{"agent_id" => id, "message" => message}) do
-    if is_binary(message) and byte_size(message) > @max_message_length do
-      {:error, "Message exceeds maximum length of #{@max_message_length} characters"}
-    else
+    with :ok <- validate_message(message) do
       scope = conn.assigns.current_scope
       trigger = conn.params["trigger"] || "manual"
 
@@ -65,6 +63,18 @@ defmodule OneAgentWeb.AgentController do
       end
     end
   end
+
+  defp validate_message(message) when is_binary(message) do
+    trimmed = String.trim(message)
+
+    cond do
+      trimmed == "" -> {:error, "Message must not be blank"}
+      byte_size(message) > @max_message_length -> {:error, "Message exceeds maximum length of #{@max_message_length} characters"}
+      true -> :ok
+    end
+  end
+
+  defp validate_message(_), do: {:error, "Message must be a non-empty string"}
 
   # ── Buckets ──────────────────────────────────────────────────
 
