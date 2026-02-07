@@ -49,23 +49,7 @@ defmodule OneAgentWeb.AgentController do
     end
   end
 
-  # ── Lifecycle ────────────────────────────────────────────────
-
-  def start(conn, %{"agent_id" => id}) do
-    scope = conn.assigns.current_scope
-
-    with {:ok, agent} <- Runtime.start_agent(scope, id) do
-      render(conn, :show, agent: agent)
-    end
-  end
-
-  def stop(conn, %{"agent_id" => id}) do
-    scope = conn.assigns.current_scope
-
-    with {:ok, agent} <- Runtime.stop_agent(scope, id) do
-      render(conn, :show, agent: agent)
-    end
-  end
+  # ── Invoke ─────────────────────────────────────────────────
 
   @max_message_length 32_000
 
@@ -158,6 +142,48 @@ defmodule OneAgentWeb.AgentController do
 
     with {:ok, agent} <- Agents.get_agent(scope, id) do
       Agents.delete_all_messages(agent)
+      send_resp(conn, :no_content, "")
+    end
+  end
+
+  # ── Schedules ──────────────────────────────────────────────
+
+  def list_schedules(conn, %{"agent_id" => id}) do
+    scope = conn.assigns.current_scope
+
+    with {:ok, agent} <- Agents.get_agent(scope, id) do
+      schedules = Agents.list_schedules(agent)
+      render(conn, :schedules, schedules: schedules)
+    end
+  end
+
+  def create_schedule(conn, %{"agent_id" => id, "schedule" => schedule_params}) do
+    scope = conn.assigns.current_scope
+
+    with {:ok, agent} <- Agents.get_agent(scope, id),
+         {:ok, schedule} <- Agents.create_schedule(agent, schedule_params) do
+      conn
+      |> put_status(:created)
+      |> render(:schedule, schedule: schedule)
+    end
+  end
+
+  def update_schedule(conn, %{"agent_id" => agent_id, "id" => schedule_id, "schedule" => schedule_params}) do
+    scope = conn.assigns.current_scope
+
+    with {:ok, agent} <- Agents.get_agent(scope, agent_id),
+         {:ok, schedule} <- Agents.get_schedule(agent, schedule_id),
+         {:ok, schedule} <- Agents.update_schedule(schedule, schedule_params) do
+      render(conn, :schedule, schedule: schedule)
+    end
+  end
+
+  def delete_schedule(conn, %{"agent_id" => agent_id, "id" => schedule_id}) do
+    scope = conn.assigns.current_scope
+
+    with {:ok, agent} <- Agents.get_agent(scope, agent_id),
+         {:ok, schedule} <- Agents.get_schedule(agent, schedule_id),
+         {:ok, _schedule} <- Agents.delete_schedule(schedule) do
       send_resp(conn, :no_content, "")
     end
   end

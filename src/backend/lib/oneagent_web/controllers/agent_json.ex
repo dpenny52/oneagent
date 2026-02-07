@@ -1,5 +1,5 @@
 defmodule OneAgentWeb.AgentJSON do
-  alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory, AgentMessage}
+  alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory, AgentMessage, AgentSchedule}
 
   def render("index.json", %{agents: agents}) do
     %{data: Enum.map(agents, &agent_data/1)}
@@ -33,22 +33,28 @@ defmodule OneAgentWeb.AgentJSON do
     %{data: Enum.map(messages, &message_data/1)}
   end
 
+  def render("schedules.json", %{schedules: schedules}) do
+    %{data: Enum.map(schedules, &schedule_data/1)}
+  end
+
+  def render("schedule.json", %{schedule: schedule}) do
+    %{data: schedule_data(schedule)}
+  end
+
   defp agent_data(%Agent{} = agent) do
     %{
       id: agent.id,
       name: agent.name,
       description: agent.description,
-      status: agent.status,
       system_prompt: agent.system_prompt,
       model_provider: agent.model_provider,
       model_id: agent.model_id,
       model_config: agent.model_config,
-      trigger_type: agent.trigger_type,
-      trigger_config: agent.trigger_config,
       max_steps_per_run: agent.max_steps_per_run,
       max_runs_per_day: agent.max_runs_per_day,
       max_history_messages: agent.max_history_messages,
       llm_config_id: agent.llm_config_id,
+      has_llm_config: agent.llm_config_id != nil,
       inserted_at: agent.inserted_at,
       updated_at: agent.updated_at
     }
@@ -126,6 +132,18 @@ defmodule OneAgentWeb.AgentJSON do
       sequence: message.sequence,
       run_id: message.run_id,
       inserted_at: message.inserted_at
+    }
+  end
+
+  defp schedule_data(%AgentSchedule{} = schedule) do
+    %{
+      id: schedule.id,
+      cron: schedule.cron,
+      message: schedule.message,
+      enabled: schedule.enabled,
+      last_run_at: schedule.last_run_at,
+      inserted_at: schedule.inserted_at,
+      updated_at: schedule.updated_at
     }
   end
 end

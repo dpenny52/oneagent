@@ -2,7 +2,7 @@ defmodule OneAgent.AgentsTest do
   use OneAgent.DataCase, async: true
 
   alias OneAgent.Agents
-  alias OneAgent.Agents.{Agent, AgentBucket, AgentStep, AgentMemory}
+  alias OneAgent.Agents.{Agent, AgentBucket, AgentStep, AgentMemory, AgentSchedule}
 
   import OneAgent.AgentsFixtures
   import OneAgent.AccountsFixtures
@@ -48,7 +48,6 @@ defmodule OneAgent.AgentsTest do
       assert {:ok, %Agent{} = agent} = Agents.create_agent(scope, attrs)
       assert agent.name == attrs["name"]
       assert agent.model_provider == "anthropic"
-      assert agent.status == "created"
     end
 
     test "fails with missing required fields", %{scope: scope} do
@@ -266,6 +265,76 @@ defmodule OneAgent.AgentsTest do
 
       Agents.delete_all_memories(agent)
       assert Agents.list_memories(agent) == []
+    end
+  end
+
+  # ── Schedules ──────────────────────────────────────────────
+
+  describe "schedules" do
+    test "create_schedule with valid cron", %{scope: scope} do
+      agent = agent_fixture(scope)
+
+      assert {:ok, %AgentSchedule{} = schedule} =
+        Agents.create_schedule(agent, %{"cron" => "*/5 * * * *", "message" => "hello"})
+
+      assert schedule.cron == "*/5 * * * *"
+      assert schedule.message == "hello"
+      assert schedule.enabled == true
+    end
+
+    test "create_schedule rejects invalid cron", %{scope: scope} do
+      agent = agent_fixture(scope)
+
+      assert {:error, changeset} =
+        Agents.create_schedule(agent, %{"cron" => "not a cron", "message" => "hello"})
+
+      assert %{cron: _} = errors_on(changeset)
+    end
+
+    test "list_schedules returns schedules for agent", %{scope: scope} do
+      agent = agent_fixture(scope)
+      _s = schedule_fixture(agent)
+      assert [_] = Agents.list_schedules(agent)
+    end
+
+    test "get_schedule returns schedule by id", %{scope: scope} do
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+      assert {:ok, found} = Agents.get_schedule(agent, schedule.id)
+      assert found.id == schedule.id
+    end
+
+    test "get_schedule returns error for wrong agent", %{scope: scope} do
+      agent1 = agent_fixture(scope)
+      agent2 = agent_fixture(scope)
+      schedule = schedule_fixture(agent1)
+      assert {:error, :not_found} = Agents.get_schedule(agent2, schedule.id)
+    end
+
+    test "update_schedule changes fields", %{scope: scope} do
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+
+      assert {:ok, updated} = Agents.update_schedule(schedule, %{"cron" => "0 * * * *", "enabled" => false})
+      assert updated.cron == "0 * * * *"
+      assert updated.enabled == false
+    end
+
+    test "delete_schedule removes schedule", %{scope: scope} do
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+
+      assert {:ok, _} = Agents.delete_schedule(schedule)
+      assert {:error, :not_found} = Agents.get_schedule(agent, schedule.id)
+    end
+
+    test "update_schedule_last_run sets timestamp", %{scope: scope} do
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+      assert schedule.last_run_at == nil
+
+      assert {:ok, updated} = Agents.update_schedule_last_run(schedule)
+      assert updated.last_run_at != nil
     end
   end
 end

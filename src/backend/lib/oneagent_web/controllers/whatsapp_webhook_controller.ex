@@ -109,18 +109,6 @@ defmodule OneAgentWeb.WhatsAppWebhookController do
   defp parse_credential(_), do: {:error, :invalid_credential}
 
   defp invoke_agent(scope, agent, text) do
-    # Always ensure the agent process is running (it may have died on server restart)
-    case OneAgent.Runtime.start_agent(scope, agent.id) do
-      {:ok, _agent} ->
-        Logger.info("Auto-started agent #{agent.id} for WhatsApp webhook")
-
-      {:error, :already_running} ->
-        :ok
-
-      {:error, reason} ->
-        Logger.error("Failed to auto-start agent #{agent.id}: #{inspect(reason)}")
-    end
-
     case OneAgent.Runtime.invoke_agent(scope, agent.id, text, "webhook") do
       {:ok, %{response: response}} -> {:ok, response}
       {:error, reason} -> {:error, reason}

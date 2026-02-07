@@ -32,7 +32,7 @@ defmodule OneAgentWeb.AgentControllerTest do
       attrs = valid_agent_attributes()
       conn = post(conn, "/api/agents", %{"agent" => attrs})
 
-      assert %{"data" => %{"id" => id, "name" => name}} = json_response(conn, 201)
+      assert %{"data" => %{"id" => id, "name" => name, "has_llm_config" => false}} = json_response(conn, 201)
       assert name == attrs["name"]
       assert id != nil
     end
@@ -187,6 +187,80 @@ defmodule OneAgentWeb.AgentControllerTest do
       _mem = agent_memory_fixture(agent)
 
       conn = delete(conn, "/api/agents/#{agent.id}/memory")
+      assert response(conn, 204)
+    end
+  end
+
+  # ── Schedules ──────────────────────────────────────────────
+
+  describe "GET /api/agents/:agent_id/schedules" do
+    test "lists schedules for agent", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+      _schedule = schedule_fixture(agent)
+
+      conn = get(conn, "/api/agents/#{agent.id}/schedules")
+      assert %{"data" => [%{"id" => _, "cron" => "*/5 * * * *"}]} = json_response(conn, 200)
+    end
+  end
+
+  describe "POST /api/agents/:agent_id/schedules" do
+    test "creates a schedule", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      conn = post(conn, "/api/agents/#{agent.id}/schedules", %{
+        "schedule" => %{"cron" => "0 * * * *", "message" => "hourly check"}
+      })
+
+      assert %{"data" => %{"id" => _, "cron" => "0 * * * *", "message" => "hourly check", "enabled" => true}} =
+        json_response(conn, 201)
+    end
+
+    test "rejects invalid cron", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      conn = post(conn, "/api/agents/#{agent.id}/schedules", %{
+        "schedule" => %{"cron" => "bad cron"}
+      })
+
+      assert %{"errors" => _} = json_response(conn, 422)
+    end
+
+    test "rejects schedule for another user's agent", %{conn: conn} do
+      other_scope = scope_fixture()
+      other_agent = agent_fixture(other_scope)
+
+      conn = post(conn, "/api/agents/#{other_agent.id}/schedules", %{
+        "schedule" => %{"cron" => "0 * * * *"}
+      })
+
+      assert json_response(conn, 404)
+    end
+  end
+
+  describe "PUT /api/agents/:agent_id/schedules/:id" do
+    test "updates a schedule", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+
+      conn = put(conn, "/api/agents/#{agent.id}/schedules/#{schedule.id}", %{
+        "schedule" => %{"cron" => "0 9 * * *", "enabled" => false}
+      })
+
+      assert %{"data" => %{"cron" => "0 9 * * *", "enabled" => false}} = json_response(conn, 200)
+    end
+  end
+
+  describe "DELETE /api/agents/:agent_id/schedules/:id" do
+    test "deletes a schedule", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+
+      conn = delete(conn, "/api/agents/#{agent.id}/schedules/#{schedule.id}")
       assert response(conn, 204)
     end
   end

@@ -52,8 +52,6 @@ defmodule OneAgentWeb.Router do
     pipe_through [:api, :require_authenticated_user]
 
     resources "/agents", AgentController, except: [:new, :edit] do
-      post "/start", AgentController, :start
-      post "/stop", AgentController, :stop
       post "/invoke", AgentController, :invoke
       get "/buckets", AgentController, :list_buckets
       put "/buckets", AgentController, :update_buckets
@@ -63,6 +61,10 @@ defmodule OneAgentWeb.Router do
       delete "/memory", AgentController, :delete_memories
       get "/messages", AgentController, :list_messages
       delete "/messages", AgentController, :delete_messages
+      get "/schedules", AgentController, :list_schedules
+      post "/schedules", AgentController, :create_schedule
+      put "/schedules/:id", AgentController, :update_schedule
+      delete "/schedules/:id", AgentController, :delete_schedule
     end
 
     resources "/credentials", CredentialController, except: [:new, :edit]

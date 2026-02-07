@@ -66,6 +66,16 @@ defmodule OneAgent.AgentsFixtures do
     memory
   end
 
+  def schedule_fixture(agent, attrs \\ %{}) do
+    attrs = Map.merge(%{
+      "cron" => "*/5 * * * *",
+      "message" => "Run scheduled task"
+    }, attrs)
+
+    {:ok, schedule} = Agents.create_schedule(agent, attrs)
+    schedule
+  end
+
   def scope_fixture do
     user = AccountsFixtures.confirmed_user_fixture()
     OneAgent.Accounts.Scope.for_user(user)

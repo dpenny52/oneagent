@@ -1,14 +1,14 @@
 defmodule OneAgent.Agents do
   @moduledoc """
   The Agents context. Manages agent CRUD, permission buckets,
-  execution history (runs/steps), and persistent memory.
+  execution history (runs/steps), persistent memory, and schedules.
 
   All queries are scoped to the authenticated user via scope.
   """
 
   import Ecto.Query
   alias OneAgent.Repo
-  alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory, AgentMessage}
+  alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory, AgentMessage, AgentSchedule}
 
   # ── Agents CRUD ──────────────────────────────────────────────
 
@@ -40,12 +40,6 @@ defmodule OneAgent.Agents do
 
   def delete_agent(%Agent{} = agent) do
     Repo.delete(agent)
-  end
-
-  def update_agent_status(%Agent{} = agent, status) do
-    agent
-    |> Agent.status_changeset(status)
-    |> Repo.update()
   end
 
   # ── Permission Buckets ───────────────────────────────────────
@@ -264,11 +258,53 @@ defmodule OneAgent.Agents do
     end
   end
 
-  # ── Scheduled Agents (unscoped) ────────────────────────────
+  # ── Schedules ───────────────────────────────────────────────
 
-  def list_scheduled_agents do
-    from(a in Agent,
-      where: a.trigger_type == "scheduled" and a.status == "running"
+  def list_schedules(%Agent{} = agent) do
+    AgentSchedule
+    |> where(agent_id: ^agent.id)
+    |> order_by(asc: :inserted_at)
+    |> Repo.all()
+  end
+
+  def get_schedule(%Agent{} = agent, schedule_id) do
+    case Repo.get_by(AgentSchedule, id: schedule_id, agent_id: agent.id) do
+      nil -> {:error, :not_found}
+      schedule -> {:ok, schedule}
+    end
+  end
+
+  def create_schedule(%Agent{} = agent, attrs) do
+    %AgentSchedule{agent_id: agent.id}
+    |> AgentSchedule.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_schedule(%AgentSchedule{} = schedule, attrs) do
+    schedule
+    |> AgentSchedule.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_schedule(%AgentSchedule{} = schedule) do
+    Repo.delete(schedule)
+  end
+
+  def update_schedule_last_run(%AgentSchedule{} = schedule) do
+    schedule
+    |> Ecto.Changeset.change(last_run_at: DateTime.utc_now(:second))
+    |> Repo.update()
+  end
+
+  @doc """
+  Returns all enabled schedules joined with their agents,
+  filtered to agents that have an llm_config_id set.
+  """
+  def list_enabled_schedules do
+    from(s in AgentSchedule,
+      join: a in assoc(s, :agent),
+      where: s.enabled == true and not is_nil(a.llm_config_id),
+      preload: [agent: a]
     )
     |> Repo.all()
   end

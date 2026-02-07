@@ -58,7 +58,7 @@ All pages are `"use client"` components with:
 
 ### Common Pitfalls
 
-- **Agent start requires `llm_config_id`** — backend returns 422 "Agent has no LLM configuration assigned" if nil. Frontend shows error banner.
+- **Agent invoke requires `llm_config_id`** — backend returns 422 "Agent has no LLM configuration assigned" if nil. Frontend gates chat on `has_llm_config`.
 - **Tab-scoped data fetching** — useEffects that refetch on `tab` change will overwrite unsaved local state. Use a `loaded` flag to fetch only once.
 - **Model options** — `MODEL_OPTIONS` map in both `dashboard/page.tsx` and `agents/[id]/page.tsx` defines provider→model lists. Keep in sync. Settings select includes a fallback option for non-matching existing model IDs.
 - **Keys page placeholders** — Label and API key placeholders are provider-aware (Anthropic vs OpenAI).
@@ -102,13 +102,14 @@ src/backend/                   # Elixir/Phoenix API-only app
         scope.ex               # Caller scope struct
       accounts.ex              # Accounts context (registration, login, OAuth, tokens)
       agents/                  # Agent domain schemas
-        agent.ex               # Agent schema (name, system_prompt, trigger_type, etc.)
+        agent.ex               # Agent schema (name, system_prompt, model, etc.)
         agent_bucket.ex        # Permission bucket schema
         agent_run.ex           # Execution run schema
         agent_step.ex          # Run step schema (LLM calls, tool executions)
         agent_memory.ex        # Persistent key-value memory schema
         agent_message.ex       # Chat history message schema (role, content, sequence)
-      agents.ex                # Agents context (CRUD, buckets, runs, steps, memory, messages)
+        agent_schedule.ex      # Cron schedule schema (multiple per agent)
+      agents.ex                # Agents context (CRUD, buckets, runs, steps, memory, messages, schedules)
       credentials/             # Credential domain schemas
         credential.ex          # Encrypted credential schema (AES-256-GCM)
         llm_config.ex          # LLM API key schema
@@ -116,10 +117,10 @@ src/backend/                   # Elixir/Phoenix API-only app
       runtime/                 # Agent runtime
         agent_process.ex       # GenServer per agent — agentic loop with chat history
         agent_supervisor.ex    # DynamicSupervisor for agent processes
-      runtime.ex               # Runtime public API (start, stop, invoke)
+      runtime.ex               # Runtime public API (invoke with auto-start)
       workers/                 # Oban background workers
-        schedule_checker.ex    # Cron worker — finds agents due to run each minute
-        scheduled_execution.ex # Per-agent scheduled run worker
+        schedule_checker.ex    # Cron worker — finds enabled schedules due to run each minute
+        scheduled_execution.ex # Per-schedule execution worker
       whatsapp/                # WhatsApp integration
         channel.ex             # Channel schema (phone_number_id → agent mapping)
         client.ex              # Cloud API client (HMAC verify, send/parse messages)
@@ -135,7 +136,7 @@ src/backend/                   # Elixir/Phoenix API-only app
         user_confirmation_controller.ex   # POST /api/auth/confirm
         google_auth_controller.ex         # GET /api/auth/google, callback
         health_controller.ex              # GET /api/health
-        agent_controller.ex               # Agent CRUD + lifecycle + buckets + runs + memory + messages
+        agent_controller.ex               # Agent CRUD + buckets + runs + memory + messages + schedules
         agent_json.ex                     # JSON views for agents, runs, buckets, messages
         credential_controller.ex          # CRUD /api/credentials
         credential_json.ex                # JSON view for credentials
@@ -218,8 +219,6 @@ See `src/backend/.env.example` for full reference:
 | POST | `/api/auth/confirm` | Bearer | No |
 | POST | `/api/auth/confirm/:token` | No | Yes |
 | CRUD | `/api/agents` | Bearer | No |
-| POST | `/api/agents/:id/start` | Bearer | No |
-| POST | `/api/agents/:id/stop` | Bearer | No |
 | POST | `/api/agents/:id/invoke` | Bearer | No |
 | GET | `/api/agents/:id/buckets` | Bearer | No |
 | PUT | `/api/agents/:id/buckets` | Bearer | No |
@@ -229,6 +228,10 @@ See `src/backend/.env.example` for full reference:
 | DELETE | `/api/agents/:id/memory` | Bearer | No |
 | GET | `/api/agents/:id/messages` | Bearer | No |
 | DELETE | `/api/agents/:id/messages` | Bearer | No |
+| GET | `/api/agents/:id/schedules` | Bearer | No |
+| POST | `/api/agents/:id/schedules` | Bearer | No |
+| PUT | `/api/agents/:id/schedules/:id` | Bearer | No |
+| DELETE | `/api/agents/:id/schedules/:id` | Bearer | No |
 | CRUD | `/api/credentials` | Bearer | No |
 | CRUD | `/api/llm-configs` | Bearer | No |
 | CRUD | `/api/whatsapp-channels` | Bearer | No |
@@ -245,7 +248,7 @@ See `src/backend/.env.example` for full reference:
 
 Agents can receive and reply to WhatsApp messages via Meta's Cloud API.
 
-**Flow:** WhatsApp message → Meta webhook POST → verify HMAC → find channel by phone_number_id → auto-start agent → invoke → send reply via Cloud API.
+**Flow:** WhatsApp message → Meta webhook POST → verify HMAC → find channel by phone_number_id → invoke agent (auto-starts process) → send reply via Cloud API.
 
 **Key design decisions:**
 - Webhook returns 200 immediately; message processing is async via `Task.Supervisor`
@@ -253,7 +256,7 @@ Agents can receive and reply to WhatsApp messages via Meta's Cloud API.
 - WhatsApp credentials (access_token + app_secret) stored encrypted in the `credentials` table with `service: "whatsapp"`, `credential_type: "custom"`
 - HMAC-SHA256 signature verification using raw body cached by `CacheRawBody` plug
 - `verify_token` is auto-generated and only returned in the create response (needed for Meta dashboard setup)
-- Agent auto-start handles stale "running" DB status after server restarts by checking the Registry
+- Agent processes auto-start on invoke — no manual start/stop needed
 - Responses truncated to 4096 chars (WhatsApp limit)
 
 **Setup:** Create a credential (WhatsApp access_token + app_secret), create an agent with LLM config, create a channel linking them, configure Meta's webhook dashboard with the callback URL and verify_token.
@@ -270,14 +273,14 @@ Agents persist conversation history in the `agent_messages` table. Each message 
 
 ### Scheduled Execution (Oban)
 
-Agents with `trigger_type: "scheduled"` and a cron expression in `trigger_config` are automatically executed on schedule.
+Agents support multiple cron schedules via the `agent_schedules` table. Each schedule has a cron expression, optional message, and enabled flag.
 
 **Architecture:**
 - **Oban** handles job processing with a Cron plugin
-- **ScheduleChecker** — runs every minute, queries all running scheduled agents, filters by cron match, enqueues `ScheduledExecution` jobs
-- **ScheduledExecution** — executes a single agent run with uniqueness (60s per agent_id), guards for status/schedule/daily limit, auto-restarts process if needed after server restart
+- **ScheduleChecker** — runs every minute, queries all enabled schedules (where agent has `llm_config_id`), filters by cron match, enqueues `ScheduledExecution` jobs per schedule
+- **ScheduledExecution** — executes a single schedule's run with uniqueness (60s per schedule_id), uses `Runtime.invoke_agent/4` (auto-starts process), updates `last_run_at` on schedule
 
-**Config:** Set `trigger_type: "scheduled"` and `trigger_config: {"cron": "*/5 * * * *", "message": "Check for updates"}` on an agent, then start it.
+**Config:** Create schedules via `POST /api/agents/:id/schedules` with `{"schedule": {"cron": "*/5 * * * *", "message": "Check for updates"}}`. Agent must have an `llm_config_id` assigned. No manual start needed — schedules fire automatically.
 
 ---
 
@@ -345,15 +348,14 @@ Run through these flows using the Chrome MCP tools (`tabs_context_mcp`, `navigat
 - On `/dashboard`, verify "Your Agents" heading, "Create Agent" button
 - Click "Create Agent" → fill modal (name, provider, model_id, system prompt)
 - Submit → verify new agent card appears in grid
-- Verify card shows name, status badge, model provider, trigger type
+- Verify card shows name, model provider, readiness indicator (Ready/Needs Config)
 - Click "Open" → verify redirect to `/agents/[id]`
 - Go back, click delete (✕) → verify agent removed
 
 #### 5. Agent Detail — Chat Tab
 - Open an agent → verify on Chat tab by default
-- If agent not running, verify yellow banner "Start agent to begin chatting"
-- Click "Start" → verify status changes to "running"
-- Type a message, press Enter → verify optimistic user bubble appears
+- If no LLM config, verify banner "Configure an LLM API key to start chatting"
+- With LLM config: type a message, press Enter → verify optimistic user bubble appears
 - Verify typing indicator (3 dots) shows while waiting
 - Verify assistant response appears (or error if no LLM key configured)
 - Click "Clear History" → verify messages cleared
@@ -363,8 +365,9 @@ Run through these flows using the Chrome MCP tools (`tabs_context_mcp`, `navigat
 - Verify form pre-populated with agent data (name, description, model, prompt, etc.)
 - Change a field (e.g. description) → click "Save Settings"
 - Verify "Saved!" message appears
-- Switch trigger type to "scheduled" → verify cron input + presets appear
-- Click a cron preset (e.g. "Every 5 min") → verify input updates
+- In Schedules section: click "+ Add Schedule" → enter cron + message → save
+- Verify new schedule appears in list. Click a cron preset → verify input updates
+- Toggle schedule enabled/disabled. Delete a schedule.
 
 #### 7. Agent Detail — Permissions Tab
 - Click "Permissions" tab

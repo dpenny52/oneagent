@@ -19,11 +19,10 @@ interface Agent {
   id: string;
   name: string;
   description: string | null;
-  status: string;
   model_provider: string;
   model_id: string;
-  trigger_type: string;
   llm_config_id: string | null;
+  has_llm_config: boolean;
   inserted_at: string;
 }
 
@@ -55,27 +54,6 @@ function useKeyframes() {
 
 function Orb({ size, color, top, left, animation, duration, opacity = 0.2 }: { size: number; color: string; top: string; left: string; animation: string; duration: string; opacity?: number }) {
   return <div style={{ position: "absolute", width: size, height: size, borderRadius: "50%", background: `radial-gradient(circle at 30% 30%, ${color}, transparent 70%)`, filter: `blur(${size * 0.4}px)`, opacity, top, left, animation: `${animation} ${duration} ease-in-out infinite`, pointerEvents: "none", willChange: "transform" }} />;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Status badge                                                       */
-/* ------------------------------------------------------------------ */
-function statusColor(status: string) {
-  switch (status) {
-    case "running": return { bg: "rgba(0,212,170,0.12)", border: `${C.glow}44`, text: C.glow };
-    case "stopped": return { bg: "rgba(255,107,107,0.08)", border: "rgba(255,107,107,0.3)", text: C.danger };
-    case "paused": return { bg: "rgba(255,200,50,0.08)", border: "rgba(255,200,50,0.3)", text: "#FFD166" };
-    default: return { bg: "rgba(216,237,230,0.06)", border: C.faint, text: C.muted };
-  }
-}
-
-function triggerIcon(type: string) {
-  switch (type) {
-    case "scheduled": return "\u23F0";
-    case "webhook": return "\u26A1";
-    case "continuous": return "\u267E\uFE0F";
-    default: return "\u25B6";
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -232,12 +210,11 @@ function DashboardContent() {
         {!loading && agents.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1rem" }}>
             {agents.map((agent, i) => {
-              const sc = statusColor(agent.status);
               return (
                 <motion.div key={agent.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} style={{ ...glassCard(), padding: "1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem", transition: "border-color 0.3s, box-shadow 0.3s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = `${C.glow}30`; e.currentTarget.style.boxShadow = `0 0 30px ${C.glow}10`; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = `${C.glow}15`; e.currentTarget.style.boxShadow = `0 0 60px ${C.glow}06, inset 0 1px 0 ${C.glow}08`; }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <h3 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.15rem", color: "#fff", fontWeight: 400 }}>{agent.name}</h3>
-                    <span style={{ fontSize: "0.72rem", padding: "0.25rem 0.6rem", borderRadius: 6, background: sc.bg, border: `1px solid ${sc.border}`, color: sc.text, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{agent.status}</span>
+                    <span style={{ fontSize: "0.72rem", padding: "0.25rem 0.6rem", borderRadius: 6, background: agent.has_llm_config ? "rgba(0,212,170,0.12)" : "rgba(255,200,50,0.08)", border: `1px solid ${agent.has_llm_config ? `${C.glow}44` : "rgba(255,200,50,0.3)"}`, color: agent.has_llm_config ? C.glow : "#FFD166", fontWeight: 500, letterSpacing: "0.05em" }}>{agent.has_llm_config ? "Ready" : "Needs Config"}</span>
                   </div>
 
                   {agent.description && (
@@ -246,7 +223,6 @@ function DashboardContent() {
 
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.78rem", color: C.faint }}>
                     <span style={{ padding: "0.2rem 0.5rem", borderRadius: 4, background: "rgba(255,255,255,0.04)" }}>{agent.model_provider}</span>
-                    <span>{triggerIcon(agent.trigger_type)} {agent.trigger_type}</span>
                   </div>
 
                   <div style={{ display: "flex", gap: "0.5rem", marginTop: "auto", paddingTop: "0.5rem" }}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Instrument_Serif, DM_Sans, Lora } from "next/font/google";
 import { useEffect, useState, useRef, FormEvent, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
@@ -21,16 +21,24 @@ interface Agent {
   name: string;
   description: string | null;
   system_prompt: string;
-  status: string;
   model_provider: string;
   model_id: string;
   model_config: Record<string, unknown>;
-  trigger_type: string;
-  trigger_config: Record<string, unknown>;
   max_steps_per_run: number;
   max_runs_per_day: number;
   max_history_messages: number;
   llm_config_id: string | null;
+  has_llm_config: boolean;
+}
+
+interface Schedule {
+  id: string;
+  cron: string;
+  message: string | null;
+  enabled: boolean;
+  last_run_at: string | null;
+  inserted_at: string;
+  updated_at: string;
 }
 
 interface Message {
@@ -91,18 +99,6 @@ function Orb({ size, color, top, left, animation, duration, opacity = 0.2 }: { s
 }
 
 /* ------------------------------------------------------------------ */
-/*  Status badge                                                       */
-/* ------------------------------------------------------------------ */
-function statusColor(status: string) {
-  switch (status) {
-    case "running": return { bg: "rgba(0,212,170,0.12)", border: `${C.glow}44`, text: C.glow };
-    case "stopped": return { bg: "rgba(255,107,107,0.08)", border: "rgba(255,107,107,0.3)", text: C.danger };
-    case "paused": return { bg: "rgba(255,200,50,0.08)", border: "rgba(255,200,50,0.3)", text: "#FFD166" };
-    default: return { bg: "rgba(216,237,230,0.06)", border: C.faint, text: C.muted };
-  }
-}
-
-/* ------------------------------------------------------------------ */
 /*  Focus helpers                                                      */
 /* ------------------------------------------------------------------ */
 function applyFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
@@ -155,8 +151,13 @@ function AgentDetailContent() {
   const [settingsLoading, setSaving] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState("");
 
-  // Lifecycle state
-  const [lifecycleError, setLifecycleError] = useState("");
+  // Schedules state
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [schedulesLoaded, setSchedulesLoaded] = useState(false);
+  const [newCron, setNewCron] = useState("");
+  const [newMessage, setNewMessage] = useState("");
+  const [addingSchedule, setAddingSchedule] = useState(false);
+  const [scheduleError, setScheduleError] = useState("");
 
   // Permissions state
   const [buckets, setBuckets] = useState<Bucket[]>([]);
@@ -211,12 +212,15 @@ function AgentDetailContent() {
     }
   }, [tab, agentId, bucketsLoaded]);
 
-  /* ---- Load configs when settings tab ---- */
+  /* ---- Load configs + schedules when settings tab ---- */
   useEffect(() => {
     if (tab === "settings") {
       api.get<LlmConfig[]>("/api/llm-configs").then((r) => { if (r.ok) setConfigs(r.data); });
+      if (!schedulesLoaded) {
+        api.get<Schedule[]>(`/api/agents/${agentId}/schedules`).then((r) => { if (r.ok) { setSchedules(r.data); setSchedulesLoaded(true); } });
+      }
     }
-  }, [tab]);
+  }, [tab, agentId, schedulesLoaded]);
 
   /* ---- Scroll to bottom on new messages ---- */
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, sending]);
@@ -244,20 +248,6 @@ function AgentDetailContent() {
     setMessages([]);
   }
 
-  /* ---- Agent lifecycle ---- */
-  async function handleStart() {
-    setLifecycleError("");
-    const res = await api.post<Agent>(`/api/agents/${agentId}/start`);
-    if (res.ok) setAgent(res.data);
-    else setLifecycleError(res.error || "Failed to start agent");
-  }
-  async function handleStop() {
-    setLifecycleError("");
-    const res = await api.post<Agent>(`/api/agents/${agentId}/stop`);
-    if (res.ok) setAgent(res.data);
-    else setLifecycleError(res.error || "Failed to stop agent");
-  }
-
   /* ---- Settings save ---- */
   async function handleSaveSettings(e: FormEvent) {
     e.preventDefault();
@@ -273,6 +263,40 @@ function AgentDetailContent() {
       setTimeout(() => setSettingsMsg(""), 2000);
     } else {
       setSettingsMsg(`Error: ${res.error}`);
+    }
+  }
+
+  /* ---- Schedule actions ---- */
+  async function handleAddSchedule() {
+    if (!newCron.trim()) return;
+    setAddingSchedule(true);
+    setScheduleError("");
+    const res = await api.post<Schedule>(`/api/agents/${agentId}/schedules`, {
+      schedule: { cron: newCron.trim(), message: newMessage.trim() || null },
+    });
+    setAddingSchedule(false);
+    if (res.ok) {
+      setSchedules((prev) => [...prev, res.data]);
+      setNewCron("");
+      setNewMessage("");
+    } else {
+      setScheduleError(res.error);
+    }
+  }
+
+  async function handleDeleteSchedule(scheduleId: string) {
+    const res = await api.del(`/api/agents/${agentId}/schedules/${scheduleId}`);
+    if (res.ok) {
+      setSchedules((prev) => prev.filter((s) => s.id !== scheduleId));
+    }
+  }
+
+  async function handleToggleSchedule(schedule: Schedule) {
+    const res = await api.put<Schedule>(`/api/agents/${agentId}/schedules/${schedule.id}`, {
+      schedule: { enabled: !schedule.enabled },
+    });
+    if (res.ok) {
+      setSchedules((prev) => prev.map((s) => s.id === schedule.id ? res.data : s));
     }
   }
 
@@ -328,10 +352,10 @@ function AgentDetailContent() {
     return <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", color: C.danger }}>Agent not found</div>;
   }
 
-  const sc = statusColor(agent.status);
+  const canChat = agent.has_llm_config;
   const selectStyle: React.CSSProperties = { ...inputStyle(), appearance: "none" as const, cursor: "pointer" };
   const tabNames: Tab[] = ["chat", "settings", "permissions", "guide"];
-  function switchTab(t: Tab) { setTab(t); setLifecycleError(""); }
+  function switchTab(t: Tab) { setTab(t); }
 
   return (
     <div className={`${instrumentSerif.variable} ${dmSans.variable} ${lora.variable}`} style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "var(--font-dm), sans-serif", position: "relative" }}>
@@ -362,23 +386,9 @@ function AgentDetailContent() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
             </a>
             <h1 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.8rem", fontWeight: 400, color: "#fff" }}>{agent.name}</h1>
-            <span style={{ fontSize: "0.72rem", padding: "0.25rem 0.6rem", borderRadius: 6, background: sc.bg, border: `1px solid ${sc.border}`, color: sc.text, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{agent.status}</span>
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            {(agent.status !== "running") && (
-              <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleStart} style={{ padding: "0.5rem 1.2rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}>Start</motion.button>
-            )}
-            {agent.status === "running" && (
-              <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleStop} style={{ padding: "0.5rem 1.2rem", borderRadius: 10, border: "1px solid rgba(255,107,107,0.3)", background: "rgba(255,107,107,0.08)", color: C.danger, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.85rem", fontWeight: 500, cursor: "pointer" }}>Stop</motion.button>
-            )}
+            <span style={{ fontSize: "0.72rem", padding: "0.25rem 0.6rem", borderRadius: 6, background: canChat ? "rgba(0,212,170,0.12)" : "rgba(255,200,50,0.08)", border: `1px solid ${canChat ? `${C.glow}44` : "rgba(255,200,50,0.3)"}`, color: canChat ? C.glow : "#FFD166", fontWeight: 500, letterSpacing: "0.05em" }}>{canChat ? "Ready" : "Needs LLM Config"}</span>
           </div>
         </div>
-
-        {lifecycleError && (
-          <div style={{ padding: "0.8rem 1rem", borderRadius: 10, background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.2)", fontSize: "0.85rem", color: C.danger, marginBottom: "1rem" }}>
-            {lifecycleError}
-          </div>
-        )}
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 12, background: "rgba(255,255,255,0.04)", marginBottom: "1.5rem" }}>
@@ -392,9 +402,9 @@ function AgentDetailContent() {
         {/* ==================== CHAT TAB ==================== */}
         {tab === "chat" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {agent.status !== "running" && (
+            {!canChat && (
               <div style={{ padding: "0.8rem 1rem", borderRadius: 10, background: "rgba(255,200,50,0.06)", border: "1px solid rgba(255,200,50,0.2)", fontSize: "0.85rem", color: "#FFD166" }}>
-                Start the agent to begin chatting.
+                Assign an LLM configuration in Settings to start chatting. <a href="/keys" style={{ color: C.glow, textDecoration: "underline" }}>Add a key</a>
               </div>
             )}
 
@@ -424,8 +434,8 @@ function AgentDetailContent() {
 
             {/* Input */}
             <form onSubmit={handleSend} style={{ display: "flex", gap: "0.5rem" }}>
-              <textarea value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder={agent.status === "running" ? "Type a message... (Enter to send)" : "Start agent to chat"} disabled={agent.status !== "running"} rows={2} style={{ ...inputStyle(), flex: 1, resize: "none" as const, opacity: agent.status !== "running" ? 0.5 : 1 }} />
-              <motion.button type="submit" disabled={sending || agent.status !== "running"} whileHover={sending ? {} : { scale: 1.03 }} whileTap={sending ? {} : { scale: 0.97 }} style={{ padding: "0 1.5rem", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.85rem", fontWeight: 600, cursor: sending || agent.status !== "running" ? "not-allowed" : "pointer", opacity: sending || agent.status !== "running" ? 0.5 : 1, alignSelf: "stretch" }}>
+              <textarea value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }} placeholder={canChat ? "Type a message... (Enter to send)" : "Configure LLM to chat"} disabled={!canChat} rows={2} style={{ ...inputStyle(), flex: 1, resize: "none" as const, opacity: !canChat ? 0.5 : 1 }} />
+              <motion.button type="submit" disabled={sending || !canChat} whileHover={sending ? {} : { scale: 1.03 }} whileTap={sending ? {} : { scale: 0.97 }} style={{ padding: "0 1.5rem", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.85rem", fontWeight: 600, cursor: sending || !canChat ? "not-allowed" : "pointer", opacity: sending || !canChat ? 0.5 : 1, alignSelf: "stretch" }}>
                 Send
               </motion.button>
             </form>
@@ -440,113 +450,132 @@ function AgentDetailContent() {
 
         {/* ==================== SETTINGS TAB ==================== */}
         {tab === "settings" && (
-          <form onSubmit={handleSaveSettings} style={{ ...glassCard(), padding: "2rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-            <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.2rem", color: "#fff", fontWeight: 400, marginBottom: "0.25rem" }}>Basic</h2>
-            <div>
-              <label style={labelStyle()}>Name</label>
-              <input value={settingsForm.name || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, name: e.target.value }))} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
-            </div>
-            <div>
-              <label style={labelStyle()}>Description</label>
-              <input value={settingsForm.description || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, description: e.target.value }))} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
-            </div>
-
-            <div style={{ borderTop: `1px solid ${C.faint}`, paddingTop: "1.25rem", marginTop: "0.5rem" }}>
-              <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.2rem", color: "#fff", fontWeight: 400, marginBottom: "1rem" }}>Model</h2>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div>
-                  <label style={labelStyle()}>Provider</label>
-                  <select value={settingsForm.model_provider || "anthropic"} onChange={(e) => { const prov = e.target.value; setSettingsForm((p) => ({ ...p, model_provider: prov, model_id: MODEL_OPTIONS[prov]?.[0]?.id || p.model_id })); }} style={selectStyle}>
-                    <option value="anthropic">Anthropic</option>
-                    <option value="openai">OpenAI</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle()}>Model</label>
-                  <select value={settingsForm.model_id || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, model_id: e.target.value }))} style={selectStyle}>
-                    {(MODEL_OPTIONS[settingsForm.model_provider || "anthropic"] || []).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                    {settingsForm.model_id && !(MODEL_OPTIONS[settingsForm.model_provider || "anthropic"] || []).some((m) => m.id === settingsForm.model_id) && (
-                      <option value={settingsForm.model_id}>{settingsForm.model_id}</option>
-                    )}
-                  </select>
-                </div>
-              </div>
-              <div style={{ marginTop: "1rem" }}>
-                <label style={labelStyle()}>LLM Config</label>
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
-                  <select value={settingsForm.llm_config_id || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, llm_config_id: e.target.value || null }))} style={{ ...selectStyle, flex: 1 }}>
-                    <option value="">None</option>
-                    {configs.map((c) => <option key={c.id} value={c.id}>{c.label} ({c.provider}){c.is_default ? " \u2605" : ""}</option>)}
-                  </select>
-                  <a href="/keys" style={{ padding: "0 1rem", borderRadius: 12, border: `1px solid ${C.glow}30`, background: "rgba(0,212,170,0.05)", color: C.glow, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.82rem", fontWeight: 500, textDecoration: "none", display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>+ Add Key</a>
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
-                <div>
-                  <label style={labelStyle()}>Max Steps Per Run</label>
-                  <input type="number" min={1} max={500} value={settingsForm.max_steps_per_run || 50} onChange={(e) => setSettingsForm((p) => ({ ...p, max_steps_per_run: parseInt(e.target.value) || 50 }))} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
-                </div>
-                <div>
-                  <label style={labelStyle()}>Max History Messages</label>
-                  <input type="number" min={0} max={200} value={settingsForm.max_history_messages ?? 20} onChange={(e) => setSettingsForm((p) => ({ ...p, max_history_messages: parseInt(e.target.value) || 0 }))} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
-                </div>
-              </div>
-            </div>
-
-            <div style={{ borderTop: `1px solid ${C.faint}`, paddingTop: "1.25rem", marginTop: "0.5rem" }}>
-              <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.2rem", color: "#fff", fontWeight: 400, marginBottom: "1rem" }}>System Prompt</h2>
-              <textarea value={settingsForm.system_prompt || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, system_prompt: e.target.value }))} rows={6} style={{ ...inputStyle(), resize: "vertical" as const }} />
-            </div>
-
-            <div style={{ borderTop: `1px solid ${C.faint}`, paddingTop: "1.25rem", marginTop: "0.5rem" }}>
-              <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.2rem", color: "#fff", fontWeight: 400, marginBottom: "1rem" }}>Trigger</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            <form onSubmit={handleSaveSettings} style={{ ...glassCard(), padding: "2rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.2rem", color: "#fff", fontWeight: 400, marginBottom: "0.25rem" }}>Basic</h2>
               <div>
-                <label style={labelStyle()}>Trigger Type</label>
-                <select value={settingsForm.trigger_type || "on_demand"} onChange={(e) => setSettingsForm((p) => ({ ...p, trigger_type: e.target.value }))} style={selectStyle}>
-                  <option value="on_demand">On Demand</option>
-                  <option value="scheduled">Scheduled</option>
-                  <option value="webhook">Webhook</option>
-                  <option value="continuous">Continuous</option>
-                </select>
+                <label style={labelStyle()}>Name</label>
+                <input value={settingsForm.name || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, name: e.target.value }))} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
+              </div>
+              <div>
+                <label style={labelStyle()}>Description</label>
+                <input value={settingsForm.description || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, description: e.target.value }))} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
               </div>
 
-              {settingsForm.trigger_type === "scheduled" && (
-                <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div style={{ borderTop: `1px solid ${C.faint}`, paddingTop: "1.25rem", marginTop: "0.5rem" }}>
+                <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.2rem", color: "#fff", fontWeight: 400, marginBottom: "1rem" }}>Model</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                   <div>
-                    <label style={labelStyle()}>Cron Expression</label>
-                    <input value={(settingsForm.trigger_config as Record<string, string>)?.cron || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, trigger_config: { ...(p.trigger_config as Record<string, string>), cron: e.target.value } }))} placeholder="*/5 * * * *" style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
-                    <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
-                      {[
-                        ["*/5 * * * *", "Every 5 min"],
-                        ["0 * * * *", "Hourly"],
-                        ["0 9 * * *", "Daily 9am"],
-                        ["0 9 * * 1", "Weekly Mon 9am"],
-                      ].map(([cron, label]) => (
-                        <button key={cron} type="button" onClick={() => setSettingsForm((p) => ({ ...p, trigger_config: { ...(p.trigger_config as Record<string, string>), cron } }))} style={{ padding: "0.25rem 0.6rem", borderRadius: 6, border: `1px solid ${C.faint}`, background: (settingsForm.trigger_config as Record<string, string>)?.cron === cron ? `${C.glow}15` : "transparent", color: (settingsForm.trigger_config as Record<string, string>)?.cron === cron ? C.glow : C.muted, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.75rem", cursor: "pointer" }}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
+                    <label style={labelStyle()}>Provider</label>
+                    <select value={settingsForm.model_provider || "anthropic"} onChange={(e) => { const prov = e.target.value; setSettingsForm((p) => ({ ...p, model_provider: prov, model_id: MODEL_OPTIONS[prov]?.[0]?.id || p.model_id })); }} style={selectStyle}>
+                      <option value="anthropic">Anthropic</option>
+                      <option value="openai">OpenAI</option>
+                    </select>
                   </div>
                   <div>
-                    <label style={labelStyle()}>Scheduled Message</label>
-                    <textarea value={(settingsForm.trigger_config as Record<string, string>)?.message || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, trigger_config: { ...(p.trigger_config as Record<string, string>), message: e.target.value } }))} placeholder="Check for updates" rows={2} style={{ ...inputStyle(), resize: "vertical" as const }} />
+                    <label style={labelStyle()}>Model</label>
+                    <select value={settingsForm.model_id || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, model_id: e.target.value }))} style={selectStyle}>
+                      {(MODEL_OPTIONS[settingsForm.model_provider || "anthropic"] || []).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                      {settingsForm.model_id && !(MODEL_OPTIONS[settingsForm.model_provider || "anthropic"] || []).some((m) => m.id === settingsForm.model_id) && (
+                        <option value={settingsForm.model_id}>{settingsForm.model_id}</option>
+                      )}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ marginTop: "1rem" }}>
+                  <label style={labelStyle()}>LLM Config</label>
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
+                    <select value={settingsForm.llm_config_id || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, llm_config_id: e.target.value || null }))} style={{ ...selectStyle, flex: 1 }}>
+                      <option value="">None</option>
+                      {configs.map((c) => <option key={c.id} value={c.id}>{c.label} ({c.provider}){c.is_default ? " \u2605" : ""}</option>)}
+                    </select>
+                    <a href="/keys" style={{ padding: "0 1rem", borderRadius: 12, border: `1px solid ${C.glow}30`, background: "rgba(0,212,170,0.05)", color: C.glow, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.82rem", fontWeight: 500, textDecoration: "none", display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>+ Add Key</a>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
+                  <div>
+                    <label style={labelStyle()}>Max Steps Per Run</label>
+                    <input type="number" min={1} max={500} value={settingsForm.max_steps_per_run || 50} onChange={(e) => setSettingsForm((p) => ({ ...p, max_steps_per_run: parseInt(e.target.value) || 50 }))} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
                   </div>
                   <div>
                     <label style={labelStyle()}>Max Runs Per Day</label>
                     <input type="number" min={1} max={10000} value={settingsForm.max_runs_per_day || 100} onChange={(e) => setSettingsForm((p) => ({ ...p, max_runs_per_day: parseInt(e.target.value) || 100 }))} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
                   </div>
+                  <div>
+                    <label style={labelStyle()}>Max History Messages</label>
+                    <input type="number" min={0} max={200} value={settingsForm.max_history_messages ?? 20} onChange={(e) => setSettingsForm((p) => ({ ...p, max_history_messages: parseInt(e.target.value) || 0 }))} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ borderTop: `1px solid ${C.faint}`, paddingTop: "1.25rem", marginTop: "0.5rem" }}>
+                <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.2rem", color: "#fff", fontWeight: 400, marginBottom: "1rem" }}>System Prompt</h2>
+                <textarea value={settingsForm.system_prompt || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, system_prompt: e.target.value }))} rows={6} style={{ ...inputStyle(), resize: "vertical" as const }} />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginTop: "0.5rem" }}>
+                <motion.button type="submit" disabled={settingsLoading} whileHover={settingsLoading ? {} : { scale: 1.02 }} whileTap={settingsLoading ? {} : { scale: 0.98 }} style={{ ...buttonStyle(settingsLoading), width: "auto", padding: "0.7rem 2rem" }}>
+                  {settingsLoading ? "Saving..." : "Save Settings"}
+                </motion.button>
+                {settingsMsg && <span style={{ fontSize: "0.85rem", color: settingsMsg.startsWith("Error") ? C.danger : C.glow }}>{settingsMsg}</span>}
+              </div>
+            </form>
+
+            {/* Schedules section */}
+            <div style={{ ...glassCard(), padding: "2rem" }}>
+              <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.2rem", color: "#fff", fontWeight: 400, marginBottom: "1rem" }}>Schedules</h2>
+              <p style={{ fontSize: "0.82rem", color: C.muted, marginBottom: "1rem" }}>Add cron schedules to run this agent automatically. Requires an LLM Config to be assigned.</p>
+
+              {/* Existing schedules */}
+              {schedules.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.25rem" }}>
+                  {schedules.map((s) => (
+                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem 1rem", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${s.enabled ? `${C.glow}20` : C.faint}` }}>
+                      <button onClick={() => handleToggleSchedule(s)} style={{ width: 36, height: 20, borderRadius: 10, border: "none", background: s.enabled ? C.glow : "rgba(255,255,255,0.1)", cursor: "pointer", position: "relative", transition: "background 0.3s", flexShrink: 0 }}>
+                        <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: s.enabled ? 19 : 3, transition: "left 0.3s" }} />
+                      </button>
+                      <code style={{ color: C.phosphor, fontSize: "0.82rem", flexShrink: 0 }}>{s.cron}</code>
+                      <span style={{ fontSize: "0.82rem", color: C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.message || "(no message)"}</span>
+                      {s.last_run_at && <span style={{ fontSize: "0.72rem", color: C.faint, flexShrink: 0 }}>Last: {new Date(s.last_run_at).toLocaleString()}</span>}
+                      <button onClick={() => handleDeleteSchedule(s.id)} style={{ padding: "0.2rem 0.5rem", borderRadius: 6, border: "1px solid rgba(255,107,107,0.2)", background: "rgba(255,107,107,0.05)", color: C.danger, fontSize: "0.75rem", cursor: "pointer" }}>{"\u2715"}</button>
+                    </div>
+                  ))}
                 </div>
               )}
-            </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginTop: "0.5rem" }}>
-              <motion.button type="submit" disabled={settingsLoading} whileHover={settingsLoading ? {} : { scale: 1.02 }} whileTap={settingsLoading ? {} : { scale: 0.98 }} style={{ ...buttonStyle(settingsLoading), width: "auto", padding: "0.7rem 2rem" }}>
-                {settingsLoading ? "Saving..." : "Save Settings"}
-              </motion.button>
-              {settingsMsg && <span style={{ fontSize: "0.85rem", color: settingsMsg.startsWith("Error") ? C.danger : C.glow }}>{settingsMsg}</span>}
+              {/* Add new schedule */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle()}>Cron Expression</label>
+                    <input value={newCron} onChange={(e) => setNewCron(e.target.value)} placeholder="*/5 * * * *" style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
+                  </div>
+                  <div style={{ flex: 2 }}>
+                    <label style={labelStyle()}>Message</label>
+                    <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Check for updates" style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
+                  </div>
+                  <motion.button type="button" disabled={addingSchedule || !newCron.trim()} onClick={handleAddSchedule} whileHover={addingSchedule ? {} : { scale: 1.03 }} whileTap={addingSchedule ? {} : { scale: 0.97 }} style={{ padding: "0.65rem 1.2rem", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.82rem", fontWeight: 600, cursor: addingSchedule || !newCron.trim() ? "not-allowed" : "pointer", opacity: addingSchedule || !newCron.trim() ? 0.5 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {addingSchedule ? "..." : "+ Add"}
+                  </motion.button>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  {[
+                    ["*/5 * * * *", "Every 5 min"],
+                    ["0 * * * *", "Hourly"],
+                    ["0 9 * * *", "Daily 9am"],
+                    ["0 9 * * 1", "Weekly Mon 9am"],
+                  ].map(([cron, label]) => (
+                    <button key={cron} type="button" onClick={() => setNewCron(cron)} style={{ padding: "0.25rem 0.6rem", borderRadius: 6, border: `1px solid ${C.faint}`, background: newCron === cron ? `${C.glow}15` : "transparent", color: newCron === cron ? C.glow : C.muted, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.75rem", cursor: "pointer" }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {scheduleError && (
+                  <div style={{ fontSize: "0.82rem", color: C.danger }}>{scheduleError}</div>
+                )}
+              </div>
             </div>
-          </form>
+          </div>
         )}
 
         {/* ==================== PERMISSIONS TAB ==================== */}
@@ -617,21 +646,14 @@ function AgentDetailContent() {
                 <li style={{ marginBottom: "0.5rem" }}>Create a WhatsApp channel linking this agent to your phone_number_id and credential</li>
                 <li style={{ marginBottom: "0.5rem" }}>In your Meta developer dashboard, set the webhook callback URL to:<br /><code style={{ color: C.phosphor }}>https://YOUR_DOMAIN/api/webhooks/whatsapp</code></li>
                 <li style={{ marginBottom: "0.5rem" }}>Use the <code style={{ color: C.phosphor }}>verify_token</code> from the channel create response to complete webhook verification</li>
-                <li>Start the agent and send a WhatsApp message to test</li>
+                <li>Send a WhatsApp message to test (agent auto-starts when needed)</li>
               </ol>
             </section>
 
             {/* Scheduling */}
             <section style={{ borderTop: `1px solid ${C.faint}`, paddingTop: "2rem" }}>
               <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.3rem", color: "#fff", fontWeight: 400, marginBottom: "1rem" }}>Scheduling</h2>
-              {agent.trigger_type === "scheduled" ? (
-                <div>
-                  <p style={{ fontSize: "0.88rem", color: C.text, marginBottom: "0.5rem" }}>Current schedule: <code style={{ color: C.phosphor }}>{(agent.trigger_config as Record<string, string>)?.cron || "not set"}</code></p>
-                  <p style={{ fontSize: "0.88rem", color: C.text, marginBottom: "1rem" }}>Message: <code style={{ color: C.phosphor }}>{(agent.trigger_config as Record<string, string>)?.message || "none"}</code></p>
-                </div>
-              ) : (
-                <p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "1rem" }}>This agent is not scheduled. Change trigger type to &quot;scheduled&quot; in Settings.</p>
-              )}
+              <p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "1rem" }}>Add schedules in the Settings tab. Each schedule has its own cron expression and message. The agent will auto-start when a schedule fires.</p>
               <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem" }}>Common cron patterns:</p>
               <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.3rem 1.5rem", fontSize: "0.82rem" }}>
                 <code style={{ color: C.phosphor }}>*/5 * * * *</code><span style={{ color: C.faint }}>Every 5 minutes</span>
