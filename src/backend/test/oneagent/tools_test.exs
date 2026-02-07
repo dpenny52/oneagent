@@ -15,12 +15,13 @@ defmodule OneAgent.ToolsTest do
   describe "all_tools/0" do
     test "returns all registered tools" do
       tools = Tools.all_tools()
-      assert length(tools) == 7
+      assert length(tools) == 8
 
       ids = Enum.map(tools, & &1.id())
       assert "http_request" in ids
       assert "read_webpage" in ids
       assert "send_email" in ids
+      assert "check_email" in ids
       assert "store_memory" in ids
       assert "recall_memory" in ids
       assert "list_schedules" in ids
@@ -80,6 +81,25 @@ defmodule OneAgent.ToolsTest do
       assert "read_webpage" in names
       refute "send_email" in names
     end
+
+    test "includes check_email when gmail bucket is granted", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "gmail"})
+
+      defs = Tools.tool_definitions_for_agent(agent)
+      names = Enum.map(defs, & &1["name"])
+
+      assert "check_email" in names
+    end
+
+    test "excludes check_email when gmail bucket not granted", %{scope: scope} do
+      agent = agent_fixture(scope)
+
+      defs = Tools.tool_definitions_for_agent(agent)
+      names = Enum.map(defs, & &1["name"])
+
+      refute "check_email" in names
+    end
   end
 
   describe "execute_tool/3 permission checking" do
@@ -91,6 +111,15 @@ defmodule OneAgent.ToolsTest do
       assert {:error, msg} = Tools.execute_tool("send_email", %{}, context)
       assert msg =~ "Permission denied"
       assert msg =~ "email"
+    end
+
+    test "rejects check_email when gmail bucket not approved", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent}
+
+      assert {:error, msg} = Tools.execute_tool("check_email", %{"action" => "list"}, context)
+      assert msg =~ "Permission denied"
+      assert msg =~ "gmail"
     end
 
     test "rejects http_request POST when data_write not approved", %{scope: scope} do

@@ -12,6 +12,7 @@ defmodule OneAgent.Tools do
     OneAgent.Tools.HttpRequest,
     OneAgent.Tools.ReadWebpage,
     OneAgent.Tools.SendEmail,
+    OneAgent.Tools.CheckEmail,
     OneAgent.Tools.StoreMemory,
     OneAgent.Tools.RecallMemory,
     OneAgent.Tools.ListSchedules,

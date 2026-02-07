@@ -49,7 +49,7 @@ Common layout pattern:
 | `/dashboard` | Yes | Agent grid — create, open, delete agents |
 | `/agents/[id]` | Yes | Agent detail — Chat, Settings, Permissions, Guide tabs |
 | `/agents/[id]?tab=guide` | Yes | Opens agent detail directly on Guide tab |
-| `/keys` | Yes | LLM API keys + tool credentials management |
+| `/keys` | Yes | LLM API keys + tool credentials + Gmail OAuth management |
 
 ---
 
@@ -96,6 +96,23 @@ Agents can receive and reply to WhatsApp messages via Meta's Cloud API.
 
 **Setup:** Create a credential (WhatsApp access_token + app_secret), create an agent with LLM config, create a channel linking them, configure Meta's webhook dashboard with the callback URL and verify_token.
 
+### Gmail Integration
+
+Agents can read Gmail emails via OAuth2 and the Gmail API (`gmail.readonly` scope).
+
+**Flow:** Frontend calls `GET /api/auth/gmail` (authenticated) → gets Google OAuth URL → user authorizes → Google redirects to `GET /api/auth/gmail/callback` → exchanges code for refresh_token → stores as credential (service: "gmail", type: "oauth_token") → redirects to `/keys?gmail_connected=true`.
+
+**Key design decisions:**
+- OAuth state is signed with `Phoenix.Token` (user_id, max_age 600s)
+- Refresh token stored encrypted as `{"refresh_token": "..."}` in credentials table
+- Token refresh happens on each `check_email` tool execution (no stored access_token)
+- Client ID/secret from app config (`google_gmail_client_id`/`google_gmail_client_secret`), falls back to Google OAuth env vars
+- Upserts: if Gmail credential already exists for user, updates it instead of creating duplicate
+- `check_email` tool has two actions: `list` (search + metadata) and `read` (full message body, truncated to 10KB)
+- Permission bucket: `gmail`; credential type: `oauth_token`
+
+**Setup:** Enable Gmail API in Google Cloud Console, configure OAuth consent screen with `gmail.readonly` scope, create OAuth credentials with redirect URI `http://localhost:4000/api/auth/gmail/callback`, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` env vars.
+
 ### Chat History
 
 Agents persist conversation history in the `agent_messages` table. Each message has a role (`user`/`assistant`), content, and auto-incrementing sequence number.
@@ -121,9 +138,11 @@ Agents support multiple cron schedules via the `agent_schedules` table. Each sch
 
 Tools are registered in `OneAgent.Tools` and exposed to the LLM filtered by the agent's active permission buckets. Tools with `bucket: nil` are always available.
 
-**Available tools:** `http_request` (dynamic bucket), `read_webpage` (web_access), `send_email` (email), `store_memory` (nil), `recall_memory` (nil), `list_schedules` (nil), `manage_schedule` (nil).
+**Available tools:** `http_request` (dynamic bucket), `read_webpage` (web_access), `send_email` (email), `check_email` (gmail), `store_memory` (nil), `recall_memory` (nil), `list_schedules` (nil), `manage_schedule` (nil).
 
 **Schedule tools:** `list_schedules` returns all/enabled schedules. `manage_schedule` supports create/update/delete actions with dedup on create (same cron+message returns `already_exists`).
+
+**Gmail tool:** `check_email` supports `list` (search with Gmail query syntax, optional `max_results`) and `read` (by `message_id`). Requires `gmail` bucket with an OAuth credential containing a refresh_token. Token refresh happens on each execute using app-level client_id/secret.
 
 ### Agentic Loop
 
@@ -223,7 +242,7 @@ Run through these flows using the Chrome MCP tools (`tabs_context_mcp`, `navigat
 
 #### 7. Agent Detail — Permissions Tab
 - Click "Permissions" tab
-- Verify 5 bucket cards (web_access, email, spending, communication, data_write)
+- Verify 6 bucket cards (web_access, email, spending, communication, data_write, gmail)
 - Toggle one on → verify toggle turns green, credential dropdown appears
 - Click "Save Permissions"
 

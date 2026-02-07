@@ -38,6 +38,13 @@ defmodule OneAgentWeb.Router do
     get "/google/callback", GoogleAuthController, :callback
   end
 
+  # Gmail OAuth callback (public — Google redirects here)
+  scope "/api/auth", OneAgentWeb do
+    pipe_through :api
+
+    get "/gmail/callback", GmailAuthController, :callback
+  end
+
   # Authenticated routes
   scope "/api/auth", OneAgentWeb do
     pipe_through [:api, :require_authenticated_user]
@@ -45,6 +52,7 @@ defmodule OneAgentWeb.Router do
     delete "/logout", UserSessionController, :delete
     get "/me", UserSessionController, :me
     put "/password", UserSessionController, :update_password
+    get "/gmail", GmailAuthController, :authorize
   end
 
   # Authenticated API routes

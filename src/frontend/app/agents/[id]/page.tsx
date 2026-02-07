@@ -166,7 +166,7 @@ function AgentDetailContent() {
   const [permLoading, setPermLoading] = useState(false);
   const [permMsg, setPermMsg] = useState("");
 
-  const BUCKET_NAMES = ["web_access", "email", "spending", "communication", "data_write"];
+  const BUCKET_NAMES = ["web_access", "email", "spending", "communication", "data_write", "gmail"];
 
   const MODEL_OPTIONS: Record<string, { id: string; label: string }[]> = {
     anthropic: [
@@ -595,6 +595,7 @@ function AgentDetailContent() {
                         {name === "spending" && "Allow financial transactions"}
                         {name === "communication" && "Allow messaging (WhatsApp, Slack, etc.)"}
                         {name === "data_write" && "Allow writing/modifying external data"}
+                        {name === "gmail" && "Allow reading emails from connected Gmail account"}
                       </p>
                     </div>
                     <button onClick={() => toggleBucket(name)} style={{ width: 44, height: 24, borderRadius: 12, border: "none", background: active ? C.glow : "rgba(255,255,255,0.1)", cursor: "pointer", position: "relative", transition: "background 0.3s" }}>

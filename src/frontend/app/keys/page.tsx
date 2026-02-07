@@ -89,6 +89,10 @@ function KeysContent() {
   const [credLoading, setCredLoading] = useState(false);
   const [credError, setCredError] = useState("");
 
+  // Gmail OAuth state
+  const [gmailConnecting, setGmailConnecting] = useState(false);
+  const [gmailMsg, setGmailMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -102,6 +106,20 @@ function KeysContent() {
       setLoading(false);
     }
     load();
+  }, []);
+
+  // Check for Gmail OAuth redirect params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("gmail_connected") === "true") {
+      setGmailMsg({ type: "success", text: "Gmail connected successfully!" });
+      // Refresh credentials to show the new Gmail credential
+      api.get<Credential[]>("/api/credentials").then((r) => { if (r.ok) setCreds(r.data); });
+      window.history.replaceState({}, "", "/keys");
+    } else if (params.get("gmail_error")) {
+      setGmailMsg({ type: "error", text: `Gmail connection failed: ${params.get("gmail_error")}` });
+      window.history.replaceState({}, "", "/keys");
+    }
   }, []);
 
   /* ---- LLM Config CRUD ---- */
@@ -187,6 +205,21 @@ function KeysContent() {
     setCredForm({ name: "", service: "", credential_type: "api_key", value: "" });
     setCredError("");
   }
+
+  /* ---- Gmail OAuth ---- */
+  async function handleConnectGmail() {
+    setGmailConnecting(true);
+    setGmailMsg(null);
+    const res = await api.get<{ url: string }>("/api/auth/gmail");
+    if (res.ok && res.data.url) {
+      window.location.href = res.data.url;
+    } else {
+      setGmailConnecting(false);
+      setGmailMsg({ type: "error", text: res.ok ? "No OAuth URL returned" : (res as { error: string }).error || "Failed to start Gmail connection" });
+    }
+  }
+
+  const gmailCred = creds.find((c) => c.service === "gmail");
 
   const selectStyle: React.CSSProperties = { ...inputStyle(), appearance: "none" as const, cursor: "pointer" };
 
@@ -289,6 +322,36 @@ function KeysContent() {
                   </div>
                 </div>
               ))}
+            </section>
+
+            {/* ==================== Gmail Access ==================== */}
+            <section style={{ marginBottom: "3rem" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+                <div>
+                  <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.6rem", color: "#fff", fontWeight: 400, marginBottom: "0.2rem" }}>Gmail Access</h2>
+                  <p style={{ fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: "0.85rem", color: C.muted }}>Connect your Gmail account to let agents read your emails</p>
+                </div>
+              </div>
+
+              {gmailMsg && (
+                <div style={{ padding: "0.7rem 1rem", borderRadius: 8, marginBottom: "1rem", background: gmailMsg.type === "success" ? "rgba(0,212,170,0.08)" : "rgba(255,107,107,0.08)", border: `1px solid ${gmailMsg.type === "success" ? C.glow + "30" : "rgba(255,107,107,0.2)"}`, fontSize: "0.85rem", color: gmailMsg.type === "success" ? C.glow : C.danger }}>
+                  {gmailMsg.text}
+                </div>
+              )}
+
+              <div style={{ ...glassCard(), padding: "1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                  <span style={{ padding: "0.2rem 0.6rem", borderRadius: 6, background: "rgba(234,67,53,0.08)", border: "1px solid rgba(234,67,53,0.3)", fontSize: "0.75rem", fontWeight: 500, color: "#EA4335", textTransform: "uppercase" }}>Gmail</span>
+                  {gmailCred ? (
+                    <span style={{ fontSize: "0.9rem", color: C.glow }}>Connected</span>
+                  ) : (
+                    <span style={{ fontSize: "0.9rem", color: C.muted }}>Not connected</span>
+                  )}
+                </div>
+                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleConnectGmail} disabled={gmailConnecting} style={{ padding: "0.6rem 1.2rem", borderRadius: 10, border: "none", background: gmailConnecting ? "rgba(255,255,255,0.1)" : `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: gmailConnecting ? C.muted : C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.85rem", fontWeight: 600, cursor: gmailConnecting ? "wait" : "pointer" }}>
+                  {gmailConnecting ? "Connecting..." : gmailCred ? "Reconnect" : "Connect Gmail"}
+                </motion.button>
+              </div>
             </section>
 
             {/* ==================== Tool Credentials ==================== */}
