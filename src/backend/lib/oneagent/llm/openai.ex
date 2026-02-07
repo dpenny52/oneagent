@@ -50,37 +50,54 @@ defmodule OneAgent.LLM.OpenAI do
   end
 
   defp convert_messages(messages) do
-    Enum.map(messages, fn msg ->
+    Enum.flat_map(messages, fn msg ->
       case msg do
         %{"role" => "user", "content" => content} when is_list(content) ->
-          # Handle Anthropic-style content blocks → just join text
-          text = content |> Enum.filter(&(&1["type"] == "text")) |> Enum.map(&(&1["text"])) |> Enum.join("\n")
-          %{"role" => "user", "content" => text}
+          tool_results = Enum.filter(content, &(is_map(&1) && &1["type"] == "tool_result"))
+          text_blocks = Enum.filter(content, &(is_map(&1) && &1["type"] == "text"))
+
+          if tool_results != [] do
+            # Convert Anthropic-style tool_result blocks to OpenAI "tool" role messages
+            Enum.map(tool_results, fn tr ->
+              %{
+                "role" => "tool",
+                "tool_call_id" => tr["tool_use_id"],
+                "content" => tr["content"] || ""
+              }
+            end)
+          else
+            text = text_blocks |> Enum.map(& &1["text"]) |> Enum.join("\n")
+            [%{"role" => "user", "content" => text}]
+          end
 
         %{"role" => "assistant", "content" => content} when is_list(content) ->
-          # Convert tool_use blocks to OpenAI format
+          # Convert tool_use blocks to OpenAI format (support both atom and string keys)
           tool_calls = content
-            |> Enum.filter(&(is_map(&1) && &1[:type] == :tool_use))
+            |> Enum.filter(fn item ->
+              is_map(item) && (item[:type] == :tool_use || item["type"] == "tool_use")
+            end)
             |> Enum.map(fn tc ->
               %{
-                "id" => tc[:id],
+                "id" => tc[:id] || tc["id"],
                 "type" => "function",
                 "function" => %{
-                  "name" => tc[:name],
-                  "arguments" => Jason.encode!(tc[:input])
+                  "name" => tc[:name] || tc["name"],
+                  "arguments" => Jason.encode!(tc[:input] || tc["input"])
                 }
               }
             end)
 
           text = content
-            |> Enum.filter(&(is_map(&1) && &1[:type] == :text))
-            |> Enum.map(&(&1[:text]))
+            |> Enum.filter(fn item ->
+              is_map(item) && (item[:type] == :text || item["type"] == "text")
+            end)
+            |> Enum.map(&(&1[:text] || &1["text"]))
             |> Enum.join("\n")
 
           base = %{"role" => "assistant", "content" => text}
-          if tool_calls != [], do: Map.put(base, "tool_calls", tool_calls), else: base
+          [if(tool_calls != [], do: Map.put(base, "tool_calls", tool_calls), else: base)]
 
-        other -> other
+        other -> [other]
       end
     end)
   end
