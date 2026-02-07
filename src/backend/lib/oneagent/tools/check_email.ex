@@ -269,9 +269,7 @@ defmodule OneAgent.Tools.CheckEmail do
     end
   end
 
-  defp truncate(text, max_bytes) when byte_size(text) > max_bytes do
-    String.slice(text, 0, max_bytes) <> "\n... [truncated]"
+  defp truncate(text, max_bytes) do
+    OneAgent.TextUtils.truncate_bytes(text, max_bytes)
   end
-
-  defp truncate(text, _max_bytes), do: text
 end

@@ -77,10 +77,6 @@ defmodule OneAgent.Tools.ReadWebpage do
   defp extract_text(body), do: inspect(body)
 
   defp truncate(text, max) do
-    if String.length(text) > max do
-      String.slice(text, 0, max) <> "\n... [truncated]"
-    else
-      text
-    end
+    OneAgent.TextUtils.truncate_chars(text, max)
   end
 end

@@ -105,11 +105,7 @@ defmodule OneAgent.Tools.HttpRequest do
   end
 
   defp truncate_body(body) when is_binary(body) do
-    if byte_size(body) > 50_000 do
-      String.slice(body, 0, 50_000) <> "\n... [truncated]"
-    else
-      body
-    end
+    OneAgent.TextUtils.truncate_bytes(body, 50_000)
   end
 
   defp truncate_body(body) when is_map(body) do
