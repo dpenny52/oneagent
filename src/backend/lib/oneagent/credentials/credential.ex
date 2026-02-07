@@ -28,6 +28,7 @@ defmodule OneAgent.Credentials.Credential do
     |> validate_inclusion(:credential_type, @valid_types)
     |> validate_length(:name, min: 1, max: 255)
     |> validate_length(:service, min: 1, max: 255)
+    |> validate_length(:value, max: 10_000)
     |> encrypt_value()
     |> foreign_key_constraint(:user_id)
     |> unique_constraint([:user_id, :name])
@@ -39,6 +40,7 @@ defmodule OneAgent.Credentials.Credential do
     |> validate_inclusion(:credential_type, @valid_types)
     |> validate_length(:name, min: 1, max: 255)
     |> validate_length(:service, min: 1, max: 255)
+    |> validate_length(:value, max: 10_000)
     |> encrypt_value()
     |> unique_constraint([:user_id, :name])
   end

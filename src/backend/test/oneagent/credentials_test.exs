@@ -43,6 +43,13 @@ defmodule OneAgent.CredentialsTest do
       assert {:error, changeset} = Credentials.create_credential(scope, %{})
       assert %{name: _, service: _, credential_type: _, value: _} = errors_on(changeset)
     end
+
+    test "rejects value exceeding 10000 characters", %{scope: scope} do
+      long_value = String.duplicate("x", 10_001)
+      attrs = valid_credential_attributes(%{"value" => long_value})
+      assert {:error, changeset} = Credentials.create_credential(scope, attrs)
+      assert %{value: ["should be at most 10000 character(s)"]} = errors_on(changeset)
+    end
   end
 
   describe "update_credential/2" do
@@ -81,6 +88,13 @@ defmodule OneAgent.CredentialsTest do
       long_service = String.duplicate("s", 256)
       assert {:error, changeset} = Credentials.update_credential(cred, %{"service" => long_service})
       assert %{service: ["should be at most 255 character(s)"]} = errors_on(changeset)
+    end
+
+    test "rejects value exceeding 10000 characters", %{scope: scope} do
+      cred = credential_fixture(scope)
+      long_value = String.duplicate("v", 10_001)
+      assert {:error, changeset} = Credentials.update_credential(cred, %{"value" => long_value})
+      assert %{value: ["should be at most 10000 character(s)"]} = errors_on(changeset)
     end
   end
 
