@@ -258,6 +258,32 @@ defmodule OneAgent.AgentsTest do
       assert Agents.get_memory(agent, "to_delete") == nil
     end
 
+    test "upsert_memory rejects oversized value", %{scope: scope} do
+      agent = agent_fixture(scope)
+      # Generate a value that exceeds the 10 KB limit
+      large_value = %{"data" => String.duplicate("x", 15_000)}
+
+      assert {:error, changeset} = Agents.upsert_memory(agent, %{
+        key: "big_key",
+        value: large_value,
+        memory_type: "fact"
+      })
+
+      assert {"is too large" <> _, _} = changeset.errors[:value]
+    end
+
+    test "upsert_memory accepts value within size limit", %{scope: scope} do
+      agent = agent_fixture(scope)
+      # A value that fits within 10 KB
+      value = %{"data" => String.duplicate("x", 5_000)}
+
+      assert {:ok, %AgentMemory{}} = Agents.upsert_memory(agent, %{
+        key: "ok_key",
+        value: value,
+        memory_type: "fact"
+      })
+    end
+
     test "delete_all_memories clears all", %{scope: scope} do
       agent = agent_fixture(scope)
       _m1 = agent_memory_fixture(agent, %{key: "k1"})
