@@ -63,7 +63,7 @@ defmodule OneAgent.Tools.StoreMemory do
         {:ok, %{"key" => memory.key, "stored" => true}}
 
       {:error, changeset} ->
-        {:error, "Failed to store memory: #{inspect(changeset.errors)}"}
+        {:error, "Failed to store memory: #{OneAgent.ChangesetErrors.format(changeset)}"}
     end
   end
 end

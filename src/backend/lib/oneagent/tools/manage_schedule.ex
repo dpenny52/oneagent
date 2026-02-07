@@ -168,15 +168,7 @@ defmodule OneAgent.Tools.ManageSchedule do
     }
   end
 
-  defp format_errors(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
-    |> Enum.map(fn {field, messages} -> "#{field}: #{Enum.join(messages, ", ")}" end)
-    |> Enum.join("; ")
-  end
+  defp format_errors(changeset), do: OneAgent.ChangesetErrors.format(changeset)
 
   defp find_duplicate(agent, cron, message) do
     OneAgent.Agents.list_schedules(agent)
