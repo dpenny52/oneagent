@@ -12,6 +12,7 @@ defmodule OneAgent.Application do
       OneAgent.Repo,
       OneAgent.Vault,
       {DNSCluster, query: Application.get_env(:oneagent, :dns_cluster_query) || :ignore},
+      {Finch, name: Swoosh.Finch},
       {Phoenix.PubSub, name: OneAgent.PubSub},
       {Registry, keys: :unique, name: OneAgent.Runtime.AgentRegistry},
       OneAgent.Runtime.AgentSupervisor,

@@ -62,8 +62,12 @@ config :phoenix, :stacktrace_depth, 20
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
 
-# Disable swoosh api client as it is only required for production adapters.
-config :swoosh, :api_client, false
+# Use Resend for real email delivery in dev
+config :oneagent, OneAgent.Mailer,
+  adapter: Swoosh.Adapters.Resend,
+  api_key: "re_HuGKzmoJ_PGzJmJzVjDWG1eZbaF9EZw93"
+
+config :swoosh, :api_client, Swoosh.ApiClient.Finch
 
 # Cloak encryption key for development (NOT for production use)
 config :oneagent, OneAgent.Vault,

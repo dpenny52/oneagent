@@ -46,7 +46,7 @@ defmodule OneAgent.Tools.SendEmail do
 
   @impl true
   def execute(input, context) do
-    from_email = context[:user_email] || "agent@oneagent.ai"
+    from_email = context[:user_email] || Application.get_env(:oneagent, :email_from, "onboarding@resend.dev")
 
     email =
       Swoosh.Email.new(

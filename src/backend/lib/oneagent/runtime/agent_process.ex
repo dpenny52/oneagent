@@ -168,27 +168,40 @@ defmodule OneAgent.Runtime.AgentProcess do
             {tool_results, new_step_count} =
               execute_tool_calls(state, run, tool_uses, step_count + 1)
 
-            # Build updated messages with assistant response + tool results
-            assistant_content = Enum.map(response.content, fn
-              %{type: :text, text: text} -> %{"type" => "text", "text" => text}
-              %{type: :tool_use, id: id, name: name, input: input} ->
-                %{"type" => "tool_use", "id" => id, "name" => name, "input" => input}
-            end)
+            # For scheduled runs, stop after tool execution — no user is waiting for a reply
+            if run.trigger == "scheduled" do
+              tool_names = Enum.map(tool_uses, & &1.name) |> Enum.join(", ")
+              summary = "Scheduled run completed. Tools called: #{tool_names}"
 
-            tool_result_msgs = Enum.map(tool_results, fn {tool_use_id, result} ->
-              %{
-                "type" => "tool_result",
-                "tool_use_id" => tool_use_id,
-                "content" => Jason.encode!(result)
-              }
-            end)
+              {:ok, run} = Agents.complete_run(run, %{
+                total_steps: new_step_count,
+                total_tokens_used: tokens
+              })
 
-            updated_messages = messages ++ [
-              %{"role" => "assistant", "content" => assistant_content},
-              %{"role" => "user", "content" => tool_result_msgs}
-            ]
+              {:ok, summary, run}
+            else
+              # Interactive run — loop back to LLM for a text response
+              assistant_content = Enum.map(response.content, fn
+                %{type: :text, text: text} -> %{"type" => "text", "text" => text}
+                %{type: :tool_use, id: id, name: name, input: input} ->
+                  %{"type" => "tool_use", "id" => id, "name" => name, "input" => input}
+              end)
 
-            agentic_loop(state, run, updated_messages, tool_defs, system, new_step_count)
+              tool_result_msgs = Enum.map(tool_results, fn {tool_use_id, result} ->
+                %{
+                  "type" => "tool_result",
+                  "tool_use_id" => tool_use_id,
+                  "content" => Jason.encode!(result)
+                }
+              end)
+
+              updated_messages = messages ++ [
+                %{"role" => "assistant", "content" => assistant_content},
+                %{"role" => "user", "content" => tool_result_msgs}
+              ]
+
+              agentic_loop(state, run, updated_messages, tool_defs, system, new_step_count)
+            end
           end
 
         {:error, reason} ->
