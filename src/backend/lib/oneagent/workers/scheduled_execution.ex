@@ -10,6 +10,7 @@ defmodule OneAgent.Workers.ScheduledExecution do
     unique: [period: 60, keys: [:schedule_id]]
 
   alias OneAgent.{Agents, Runtime}
+  alias OneAgent.Accounts.Scope
   alias OneAgent.Agents.AgentSchedule
 
   @impl Oban.Worker
@@ -17,7 +18,7 @@ defmodule OneAgent.Workers.ScheduledExecution do
     with {:ok, schedule} <- get_schedule(schedule_id),
          :ok <- check_daily_limit(schedule.agent) do
       message = schedule.message || "Execute your scheduled task."
-      scope = %{user: %{id: schedule.agent.user_id}}
+      scope = Scope.for_user(schedule.agent.user)
 
       case Runtime.invoke_agent(scope, schedule.agent.id, message, "scheduled") do
         {:ok, _result} ->
@@ -34,7 +35,7 @@ defmodule OneAgent.Workers.ScheduledExecution do
     case OneAgent.Repo.get(AgentSchedule, schedule_id) do
       nil -> {:discard, "Schedule not found"}
       schedule ->
-        schedule = OneAgent.Repo.preload(schedule, :agent)
+        schedule = OneAgent.Repo.preload(schedule, agent: :user)
 
         cond do
           !schedule.enabled -> {:discard, "Schedule disabled"}
