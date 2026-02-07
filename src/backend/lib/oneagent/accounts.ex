@@ -25,9 +25,23 @@ defmodule OneAgent.Accounts do
   ## User registration
 
   def register_user(attrs) do
-    %User{}
-    |> User.registration_changeset(attrs)
-    |> Repo.insert()
+    email = attrs["email"] || attrs[:email]
+
+    if email_allowed?(email) do
+      %User{}
+      |> User.registration_changeset(attrs)
+      |> Repo.insert()
+    else
+      {:error, :registration_disabled}
+    end
+  end
+
+  defp email_allowed?(email) do
+    case Application.get_env(:oneagent, :allowed_emails) do
+      nil -> true
+      [] -> true
+      allowed when is_list(allowed) -> String.downcase(to_string(email)) in allowed
+    end
   end
 
   ## API Tokens

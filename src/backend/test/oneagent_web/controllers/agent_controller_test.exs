@@ -2,6 +2,7 @@ defmodule OneAgentWeb.AgentControllerTest do
   use OneAgentWeb.ConnCase, async: true
 
   import OneAgent.AgentsFixtures
+  import OneAgent.CredentialsFixtures, except: [scope_fixture: 0]
 
   setup :register_and_log_in_user
 
@@ -40,6 +41,16 @@ defmodule OneAgentWeb.AgentControllerTest do
       conn = post(conn, "/api/agents", %{"agent" => %{}})
       assert %{"errors" => _} = json_response(conn, 422)
     end
+
+    test "rejects another user's llm_config_id", %{conn: conn} do
+      other_scope = scope_fixture()
+      other_config = llm_config_fixture(other_scope)
+
+      attrs = valid_agent_attributes(%{"llm_config_id" => other_config.id})
+      conn = post(conn, "/api/agents", %{"agent" => attrs})
+
+      assert %{"error" => _} = json_response(conn, 422)
+    end
   end
 
   describe "GET /api/agents/:id" do
@@ -65,6 +76,20 @@ defmodule OneAgentWeb.AgentControllerTest do
 
       conn = put(conn, "/api/agents/#{agent.id}", %{"agent" => %{"name" => "Updated"}})
       assert %{"data" => %{"name" => "Updated"}} = json_response(conn, 200)
+    end
+
+    test "rejects another user's llm_config_id", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      other_scope = scope_fixture()
+      other_config = llm_config_fixture(other_scope)
+
+      conn = put(conn, "/api/agents/#{agent.id}", %{
+        "agent" => %{"llm_config_id" => other_config.id}
+      })
+
+      assert %{"error" => _} = json_response(conn, 422)
     end
   end
 
@@ -103,6 +128,21 @@ defmodule OneAgentWeb.AgentControllerTest do
       bucket_names = Enum.map(buckets, & &1["bucket"])
       assert "email" in bucket_names
       assert "data_write" in bucket_names
+    end
+
+    test "rejects another user's credential_id", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      # Create a credential owned by a different user
+      other_scope = scope_fixture()
+      other_cred = credential_fixture(other_scope)
+
+      conn = put(conn, "/api/agents/#{agent.id}/buckets", %{
+        "buckets" => [%{"bucket" => "web_access", "credential_id" => other_cred.id}]
+      })
+
+      assert %{"error" => _} = json_response(conn, 422)
     end
   end
 

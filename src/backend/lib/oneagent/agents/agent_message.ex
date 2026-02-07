@@ -23,6 +23,7 @@ defmodule OneAgent.Agents.AgentMessage do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> validate_inclusion(:role, ~w(user assistant))
+    |> validate_length(:content, max: 32_000)
     |> foreign_key_constraint(:agent_id)
     |> foreign_key_constraint(:run_id)
   end

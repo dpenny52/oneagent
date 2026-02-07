@@ -43,6 +43,7 @@ defmodule OneAgent.Agents.Agent do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> validate_length(:name, min: 1, max: 255)
+    |> validate_length(:system_prompt, max: 100_000)
     |> validate_inclusion(:status, @valid_statuses)
     |> validate_inclusion(:model_provider, @valid_providers)
     |> validate_inclusion(:trigger_type, @valid_triggers)

@@ -22,6 +22,13 @@ defmodule OneAgentWeb.FallbackController do
     |> render("error.json", error: "Invalid credentials")
   end
 
+  def call(conn, {:error, :registration_disabled}) do
+    conn
+    |> put_status(:forbidden)
+    |> put_view(OneAgentWeb.AuthJSON)
+    |> render("error.json", error: "Registration is not available at this time")
+  end
+
   def call(conn, {:error, message}) when is_binary(message) do
     conn
     |> put_status(:unprocessable_entity)

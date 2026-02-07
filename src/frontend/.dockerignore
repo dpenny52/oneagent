@@ -1,0 +1,18 @@
+# Version control
+.git
+
+# Dependencies
+node_modules
+
+# Build output
+.next
+out
+
+# Development
+.env
+.env.*
+
+# Misc
+.DS_Store
+*.swp
+*~

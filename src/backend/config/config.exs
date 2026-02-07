@@ -70,6 +70,15 @@ config :oneagent, OneAgent.Vault,
     default: {Cloak.Ciphers.AES.GCM, tag: "AES.GCM.V1", key: ""}
   ]
 
+# Registration allowlist (nil = open registration)
+config :oneagent, :allowed_emails, nil
+
+# Frontend URL for email links
+config :oneagent, :frontend_url, "http://localhost:3000"
+
+# Email from address
+config :oneagent, :email_from, "contact@example.com"
+
 # Oban job processing
 config :oneagent, Oban,
   repo: OneAgent.Repo,

@@ -28,7 +28,8 @@ defmodule OneAgentWeb.UserSessionController do
   @doc "POST /api/auth/magic-link — request a magic link email"
   def send_magic_link(conn, %{"user" => %{"email" => email}}) do
     if user = Accounts.get_user_by_email(email) do
-      Accounts.deliver_magic_link(user, fn token -> token end)
+      frontend_url = Application.get_env(:oneagent, :frontend_url, "http://localhost:3000")
+      Accounts.deliver_magic_link(user, fn token -> "#{frontend_url}/login?magic_link=#{token}" end)
     end
 
     # Always return same response to prevent user enumeration

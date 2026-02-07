@@ -1,0 +1,20 @@
+# Version control
+.git
+
+# Build artifacts
+_build
+deps
+
+# Development
+.env
+.env.*
+.elixir_ls
+
+# Test
+test
+cover
+
+# Misc
+.DS_Store
+*.swp
+*~

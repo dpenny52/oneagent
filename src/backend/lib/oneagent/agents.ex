@@ -77,20 +77,35 @@ defmodule OneAgent.Agents do
     end
   end
 
-  def update_buckets(%Agent{} = agent, bucket_configs) do
-    Repo.transaction(fn ->
-      # Revoke all current active buckets
-      from(b in AgentBucket, where: b.agent_id == ^agent.id and is_nil(b.revoked_at))
-      |> Repo.update_all(set: [revoked_at: DateTime.utc_now(:second)])
+  def update_buckets(%Agent{} = agent, bucket_configs, scope) do
+    alias OneAgent.Credentials
 
-      # Grant new buckets
-      Enum.map(bucket_configs, fn config ->
-        case grant_bucket(agent, config) do
-          {:ok, bucket} -> bucket
-          {:error, changeset} -> Repo.rollback(changeset)
+    # Validate all credential_ids belong to the current user
+    invalid_credential =
+      Enum.find(bucket_configs, fn config ->
+        case Map.get(config, :credential_id) do
+          nil -> false
+          cred_id -> match?({:error, :not_found}, Credentials.get_credential(scope, cred_id))
         end
       end)
-    end)
+
+    if invalid_credential do
+      {:error, :invalid_credential}
+    else
+      Repo.transaction(fn ->
+        # Revoke all current active buckets
+        from(b in AgentBucket, where: b.agent_id == ^agent.id and is_nil(b.revoked_at))
+        |> Repo.update_all(set: [revoked_at: DateTime.utc_now(:second)])
+
+        # Grant new buckets
+        Enum.map(bucket_configs, fn config ->
+          case grant_bucket(agent, config) do
+            {:ok, bucket} -> bucket
+            {:error, changeset} -> Repo.rollback(changeset)
+          end
+        end)
+      end)
+    end
   end
 
   def has_bucket?(%Agent{} = agent, bucket_name) do

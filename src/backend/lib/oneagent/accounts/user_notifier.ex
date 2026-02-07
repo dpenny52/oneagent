@@ -5,10 +5,12 @@ defmodule OneAgent.Accounts.UserNotifier do
   alias OneAgent.Accounts.User
 
   defp deliver(recipient, subject, body) do
+    from_address = Application.get_env(:oneagent, :email_from, "contact@example.com")
+
     email =
       new()
       |> to(recipient)
-      |> from({"OneAgent", "contact@example.com"})
+      |> from({"OneAgent", from_address})
       |> subject(subject)
       |> text_body(body)
 

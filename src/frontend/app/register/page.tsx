@@ -80,7 +80,11 @@ export default function RegisterPage() {
       login(res.data.token);
       window.location.href = "/dashboard";
     } else {
-      setError(res.error);
+      if (res.status === 403) {
+        setError("Registration is currently invite-only. Please contact the administrator.");
+      } else {
+        setError(res.error);
+      }
     }
   }
 

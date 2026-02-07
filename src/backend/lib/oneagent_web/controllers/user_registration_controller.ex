@@ -15,6 +15,12 @@ defmodule OneAgentWeb.UserRegistrationController do
         |> put_view(OneAgentWeb.AuthJSON)
         |> render("user.json", user: user, token: token)
 
+      {:error, :registration_disabled} ->
+        conn
+        |> put_status(:forbidden)
+        |> put_view(OneAgentWeb.AuthJSON)
+        |> render("error.json", error: "Registration is not available at this time")
+
       {:error, changeset} ->
         {:error, changeset}
     end

@@ -8,7 +8,8 @@ defmodule OneAgentWeb.UserPasswordResetController do
   @doc "POST /api/auth/forgot-password"
   def create(conn, %{"user" => %{"email" => email}}) do
     if user = Accounts.get_user_by_email(email) do
-      Accounts.deliver_user_reset_password_instructions(user, fn token -> token end)
+      frontend_url = Application.get_env(:oneagent, :frontend_url, "http://localhost:3000")
+      Accounts.deliver_user_reset_password_instructions(user, fn token -> "#{frontend_url}/reset-password?token=#{token}" end)
     end
 
     # Always return same response to prevent user enumeration

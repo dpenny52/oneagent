@@ -1,7 +1,7 @@
 defmodule OneAgentWeb.AgentController do
   use OneAgentWeb, :controller
 
-  alias OneAgent.{Agents, Runtime}
+  alias OneAgent.{Agents, Credentials, Runtime}
 
   action_fallback OneAgentWeb.FallbackController
 
@@ -14,7 +14,8 @@ defmodule OneAgentWeb.AgentController do
   def create(conn, %{"agent" => agent_params}) do
     scope = conn.assigns.current_scope
 
-    with {:ok, agent} <- Agents.create_agent(scope, agent_params) do
+    with :ok <- validate_llm_config_ownership(scope, agent_params),
+         {:ok, agent} <- Agents.create_agent(scope, agent_params) do
       conn
       |> put_status(:created)
       |> render(:show, agent: agent)
@@ -32,7 +33,8 @@ defmodule OneAgentWeb.AgentController do
   def update(conn, %{"id" => id, "agent" => agent_params}) do
     scope = conn.assigns.current_scope
 
-    with {:ok, agent} <- Agents.get_agent(scope, id),
+    with :ok <- validate_llm_config_ownership(scope, agent_params),
+         {:ok, agent} <- Agents.get_agent(scope, id),
          {:ok, agent} <- Agents.update_agent(agent, agent_params) do
       render(conn, :show, agent: agent)
     end
@@ -65,12 +67,18 @@ defmodule OneAgentWeb.AgentController do
     end
   end
 
-  def invoke(conn, %{"agent_id" => id, "message" => message}) do
-    scope = conn.assigns.current_scope
-    trigger = conn.params["trigger"] || "manual"
+  @max_message_length 32_000
 
-    with {:ok, result} <- Runtime.invoke_agent(scope, id, message, trigger) do
-      render(conn, :invoke, result: result)
+  def invoke(conn, %{"agent_id" => id, "message" => message}) do
+    if is_binary(message) and byte_size(message) > @max_message_length do
+      {:error, "Message exceeds maximum length of #{@max_message_length} characters"}
+    else
+      scope = conn.assigns.current_scope
+      trigger = conn.params["trigger"] || "manual"
+
+      with {:ok, result} <- Runtime.invoke_agent(scope, id, message, trigger) do
+        render(conn, :invoke, result: result)
+      end
     end
   end
 
@@ -89,7 +97,7 @@ defmodule OneAgentWeb.AgentController do
     scope = conn.assigns.current_scope
 
     with {:ok, agent} <- Agents.get_agent(scope, id),
-         {:ok, buckets} <- Agents.update_buckets(agent, atomize_bucket_configs(bucket_configs)) do
+         {:ok, buckets} <- Agents.update_buckets(agent, atomize_bucket_configs(bucket_configs), scope) do
       render(conn, :buckets, buckets: buckets)
     end
   end
@@ -160,5 +168,16 @@ defmodule OneAgentWeb.AgentController do
       |> Map.take(["bucket", "scope_config", "credential_id"])
       |> Map.new(fn {k, v} -> {String.to_existing_atom(k), v} end)
     end)
+  end
+
+  defp validate_llm_config_ownership(scope, params) do
+    case params["llm_config_id"] || params[:llm_config_id] do
+      nil -> :ok
+      config_id ->
+        case Credentials.get_llm_config(scope, config_id) do
+          {:ok, _} -> :ok
+          {:error, :not_found} -> {:error, :invalid_llm_config}
+        end
+    end
   end
 end

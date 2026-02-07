@@ -29,6 +29,28 @@ if cloak_key = System.get_env("CLOAK_KEY") do
     ]
 end
 
+# Email allowlist (comma-separated, optional)
+if allowed = System.get_env("ALLOWED_EMAILS") do
+  emails =
+    allowed
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+    |> Enum.map(&String.downcase/1)
+    |> Enum.reject(&(&1 == ""))
+
+  config :oneagent, :allowed_emails, emails
+end
+
+# Configurable email from address
+if email_from = System.get_env("EMAIL_FROM") do
+  config :oneagent, :email_from, email_from
+end
+
+# Frontend URL for email links
+if frontend_url = System.get_env("FRONTEND_URL") do
+  config :oneagent, :frontend_url, frontend_url
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
@@ -51,6 +73,15 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
+  # Require CLOAK_KEY in production for credential encryption
+  unless System.get_env("CLOAK_KEY") do
+    raise """
+    environment variable CLOAK_KEY is missing.
+    Credentials will not be encrypted without it.
+    Generate one with: elixir -e "IO.puts(Base.encode64(:crypto.strong_rand_bytes(32)))"
+    """
+  end
+
   host = System.get_env("PHX_HOST") || "example.com"
 
   config :oneagent, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
@@ -61,4 +92,11 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0}
     ],
     secret_key_base: secret_key_base
+
+  # Resend email adapter for production
+  if resend_key = System.get_env("RESEND_API_KEY") do
+    config :oneagent, OneAgent.Mailer,
+      adapter: Swoosh.Adapters.Resend,
+      api_key: resend_key
+  end
 end
