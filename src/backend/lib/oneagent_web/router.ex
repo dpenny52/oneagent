@@ -98,6 +98,7 @@ defmodule OneAgentWeb.Router do
       post "/schedules", AgentController, :create_schedule
       put "/schedules/:id", AgentController, :update_schedule
       delete "/schedules/:id", AgentController, :delete_schedule
+      get "/goals", AgentController, :list_goals
     end
 
     resources "/credentials", CredentialController, except: [:new, :edit]

@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Instrument_Serif, DM_Sans, Lora } from "next/font/google";
-import { useEffect, useState, useRef, FormEvent, useCallback } from "react";
+import { useEffect, useState, useRef, useMemo, FormEvent, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "../../lib/auth";
 import { api } from "../../lib/api";
@@ -48,6 +48,31 @@ interface Schedule {
   updated_at: string;
 }
 
+interface GoalStep {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  position: number;
+  schedule_id: string | null;
+  result_notes: string | null;
+  completed_at: string | null;
+}
+
+interface Goal {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: number;
+  due_date: string | null;
+  review_schedule_id: string | null;
+  completed_at: string | null;
+  steps: GoalStep[];
+  inserted_at: string;
+  updated_at: string;
+}
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -80,7 +105,7 @@ interface Credential {
   credential_type: string;
 }
 
-type Tab = "chat" | "settings" | "permissions" | "guide";
+type Tab = "chat" | "schedules" | "settings" | "permissions" | "guide";
 
 /* ------------------------------------------------------------------ */
 /*  Keyframes                                                          */
@@ -161,11 +186,13 @@ function AgentDetailContent() {
 
   // Schedules state
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [schedulesLoaded, setSchedulesLoaded] = useState(false);
   const [newCron, setNewCron] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [addingSchedule, setAddingSchedule] = useState(false);
   const [scheduleError, setScheduleError] = useState("");
+
+  // Goals state
+  const [goals, setGoals] = useState<Goal[]>([]);
 
   // Permissions state
   const [buckets, setBuckets] = useState<Bucket[]>([]);
@@ -220,11 +247,18 @@ function AgentDetailContent() {
     }
   }, [tab, agentId, bucketsLoaded]);
 
-  /* ---- Load configs + schedules when settings tab ---- */
+  /* ---- Load configs when settings tab ---- */
   useEffect(() => {
     if (tab === "settings") {
       api.get<LlmConfig[]>("/api/llm-configs").then((r) => { if (r.ok) setConfigs(r.data); });
-      api.get<Schedule[]>(`/api/agents/${agentId}/schedules`).then((r) => { if (r.ok) { setSchedules(r.data); setSchedulesLoaded(true); } });
+    }
+  }, [tab, agentId]);
+
+  /* ---- Load schedules + goals when schedules tab (only first visit) ---- */
+  useEffect(() => {
+    if (tab === "schedules") {
+      api.get<Schedule[]>(`/api/agents/${agentId}/schedules`).then((r) => { if (r.ok) setSchedules(r.data); });
+      api.get<Goal[]>(`/api/agents/${agentId}/goals`).then((r) => { if (r.ok) setGoals(r.data); });
     }
   }, [tab, agentId]);
 
@@ -350,6 +384,40 @@ function AgentDetailContent() {
     );
   }
 
+  /* ---- Schedule grouping by goal ---- */
+  const scheduleGoalMap = useMemo(() => {
+    const map = new Map<string, { goal: Goal; role: "review" | "step"; step?: GoalStep }>();
+    for (const goal of goals) {
+      if (goal.review_schedule_id) {
+        map.set(goal.review_schedule_id, { goal, role: "review" });
+      }
+      for (const step of goal.steps || []) {
+        if (step.schedule_id) {
+          map.set(step.schedule_id, { goal, role: "step", step });
+        }
+      }
+    }
+    return map;
+  }, [goals]);
+
+  const standaloneSchedules = useMemo(() =>
+    schedules.filter((s) => !scheduleGoalMap.has(s.id)),
+    [schedules, scheduleGoalMap]
+  );
+
+  const goalGroups = useMemo(() => {
+    const groupMap = new Map<string, { goal: Goal; schedules: { schedule: Schedule; role: "review" | "step"; step?: GoalStep }[] }>();
+    for (const s of schedules) {
+      const entry = scheduleGoalMap.get(s.id);
+      if (!entry) continue;
+      if (!groupMap.has(entry.goal.id)) {
+        groupMap.set(entry.goal.id, { goal: entry.goal, schedules: [] });
+      }
+      groupMap.get(entry.goal.id)!.schedules.push({ schedule: s, role: entry.role, step: entry.step });
+    }
+    return Array.from(groupMap.values());
+  }, [schedules, scheduleGoalMap]);
+
   if (loading) {
     return <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted }}>Loading...</div>;
   }
@@ -360,7 +428,7 @@ function AgentDetailContent() {
 
   const canChat = agent.has_llm_config;
   const selectStyle: React.CSSProperties = { ...inputStyle(), appearance: "none" as const, cursor: "pointer" };
-  const tabNames: Tab[] = ["chat", "settings", "permissions", "guide"];
+  const tabNames: Tab[] = ["chat", "schedules", "settings", "permissions", "guide"];
   function switchTab(t: Tab) { setTab(t); }
 
   return (
@@ -454,6 +522,108 @@ function AgentDetailContent() {
           </div>
         )}
 
+        {/* ==================== SCHEDULES TAB ==================== */}
+        {tab === "schedules" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            {/* Goal-grouped schedules */}
+            {goalGroups.map(({ goal, schedules: goalSchedules }) => (
+              <div key={goal.id} style={{ ...glassCard(), padding: "1.5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+                  <h3 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.1rem", color: "#fff", fontWeight: 400, margin: 0 }}>{goal.title}</h3>
+                  <span style={{
+                    fontSize: "0.68rem", padding: "0.2rem 0.5rem", borderRadius: 5, fontWeight: 500, letterSpacing: "0.04em", textTransform: "uppercase",
+                    background: goal.status === "active" ? "rgba(0,212,170,0.12)" : goal.status === "completed" ? "rgba(155,114,207,0.12)" : goal.status === "paused" ? "rgba(255,200,50,0.08)" : "rgba(255,107,107,0.08)",
+                    border: `1px solid ${goal.status === "active" ? `${C.glow}44` : goal.status === "completed" ? `${C.lavender}44` : goal.status === "paused" ? "rgba(255,200,50,0.3)" : `${C.danger}30`}`,
+                    color: goal.status === "active" ? C.glow : goal.status === "completed" ? C.lavender : goal.status === "paused" ? "#FFD166" : C.danger,
+                  }}>{goal.status}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {goalSchedules.map(({ schedule: s, role, step }) => (
+                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem 1rem", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${s.enabled ? `${C.glow}20` : C.faint}` }}>
+                      <button onClick={() => handleToggleSchedule(s)} style={{ width: 36, height: 20, borderRadius: 10, border: "none", background: s.enabled ? C.glow : "rgba(255,255,255,0.1)", cursor: "pointer", position: "relative", transition: "background 0.3s", flexShrink: 0 }}>
+                        <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: s.enabled ? 19 : 3, transition: "left 0.3s" }} />
+                      </button>
+                      <span style={{ flexShrink: 0, display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+                        <span style={{ color: C.phosphor, fontSize: "0.82rem" }}>{cronToHuman(s.cron)}</span>
+                        {cronToHuman(s.cron) !== s.cron && <code style={{ color: C.faint, fontSize: "0.62rem", marginTop: "-0.05rem" }}>{s.cron}</code>}
+                      </span>
+                      <span style={{
+                        fontSize: "0.7rem", padding: "0.15rem 0.45rem", borderRadius: 4, fontWeight: 500, flexShrink: 0,
+                        background: role === "review" ? "rgba(155,114,207,0.1)" : "rgba(0,212,170,0.08)",
+                        border: `1px solid ${role === "review" ? `${C.lavender}30` : `${C.glow}25`}`,
+                        color: role === "review" ? C.lavender : C.glow,
+                      }}>{role === "review" ? "Review" : step?.title || "Step"}</span>
+                      {s.last_run_at && <span style={{ fontSize: "0.72rem", color: C.faint, flexShrink: 0, marginLeft: "auto" }}>Last: {new Date(s.last_run_at).toLocaleString()}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Standalone schedules */}
+            <div style={{ ...glassCard(), padding: "1.5rem" }}>
+              <h3 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.1rem", color: "#fff", fontWeight: 400, marginBottom: "1rem" }}>Standalone Schedules</h3>
+              {standaloneSchedules.length === 0 && (
+                <p style={{ fontSize: "0.85rem", color: C.faint, marginBottom: 0 }}>No standalone schedules. Add one below or let the agent create goal-linked schedules.</p>
+              )}
+              {standaloneSchedules.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {standaloneSchedules.map((s) => (
+                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem 1rem", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${s.enabled ? `${C.glow}20` : C.faint}` }}>
+                      <button onClick={() => handleToggleSchedule(s)} style={{ width: 36, height: 20, borderRadius: 10, border: "none", background: s.enabled ? C.glow : "rgba(255,255,255,0.1)", cursor: "pointer", position: "relative", transition: "background 0.3s", flexShrink: 0 }}>
+                        <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: s.enabled ? 19 : 3, transition: "left 0.3s" }} />
+                      </button>
+                      <span style={{ flexShrink: 0, display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+                        <span style={{ color: C.phosphor, fontSize: "0.82rem" }}>{cronToHuman(s.cron)}</span>
+                        {cronToHuman(s.cron) !== s.cron && <code style={{ color: C.faint, fontSize: "0.62rem", marginTop: "-0.05rem" }}>{s.cron}</code>}
+                      </span>
+                      <span style={{ fontSize: "0.82rem", color: C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.message || "(no message)"}</span>
+                      {s.last_run_at && <span style={{ fontSize: "0.72rem", color: C.faint, flexShrink: 0 }}>Last: {new Date(s.last_run_at).toLocaleString()}</span>}
+                      <button onClick={() => handleDeleteSchedule(s.id)} style={{ padding: "0.2rem 0.5rem", borderRadius: 6, border: "1px solid rgba(255,107,107,0.2)", background: "rgba(255,107,107,0.05)", color: C.danger, fontSize: "0.75rem", cursor: "pointer" }}>{"\u2715"}</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Add schedule */}
+            <div style={{ ...glassCard(), padding: "1.5rem" }}>
+              <h3 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.1rem", color: "#fff", fontWeight: 400, marginBottom: "0.75rem" }}>Add Schedule</h3>
+              <p style={{ fontSize: "0.82rem", color: C.muted, marginBottom: "1rem" }}>Create a standalone cron schedule. Requires an LLM Config to be assigned.</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle()}>Cron Expression</label>
+                    <input value={newCron} onChange={(e) => setNewCron(e.target.value)} placeholder="*/5 * * * *" style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
+                  </div>
+                  <div style={{ flex: 2 }}>
+                    <label style={labelStyle()}>Message</label>
+                    <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Check for updates" style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
+                  </div>
+                  <motion.button type="button" disabled={addingSchedule || !newCron.trim()} onClick={handleAddSchedule} whileHover={addingSchedule ? {} : { scale: 1.03 }} whileTap={addingSchedule ? {} : { scale: 0.97 }} style={{ padding: "0.65rem 1.2rem", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.82rem", fontWeight: 600, cursor: addingSchedule || !newCron.trim() ? "not-allowed" : "pointer", opacity: addingSchedule || !newCron.trim() ? 0.5 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {addingSchedule ? "..." : "+ Add"}
+                  </motion.button>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  {[
+                    ["*/5 * * * *", "Every 5 min"],
+                    ["0 * * * *", "Hourly"],
+                    ["0 9 * * *", "Daily 9am"],
+                    ["0 9 * * 1", "Weekly Mon 9am"],
+                  ].map(([cron, label]) => (
+                    <button key={cron} type="button" onClick={() => setNewCron(cron)} style={{ padding: "0.25rem 0.6rem", borderRadius: 6, border: `1px solid ${C.faint}`, background: newCron === cron ? `${C.glow}15` : "transparent", color: newCron === cron ? C.glow : C.muted, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.75rem", cursor: "pointer" }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {scheduleError && (
+                  <div style={{ fontSize: "0.82rem", color: C.danger }}>{scheduleError}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ==================== SETTINGS TAB ==================== */}
         {tab === "settings" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -526,64 +696,6 @@ function AgentDetailContent() {
                 {settingsMsg && <span style={{ fontSize: "0.85rem", color: settingsMsg.startsWith("Error") ? C.danger : C.glow }}>{settingsMsg}</span>}
               </div>
             </form>
-
-            {/* Schedules section */}
-            <div style={{ ...glassCard(), padding: "2rem" }}>
-              <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.2rem", color: "#fff", fontWeight: 400, marginBottom: "1rem" }}>Schedules</h2>
-              <p style={{ fontSize: "0.82rem", color: C.muted, marginBottom: "1rem" }}>Add cron schedules to run this agent automatically. Requires an LLM Config to be assigned.</p>
-
-              {/* Existing schedules */}
-              {schedules.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.25rem" }}>
-                  {schedules.map((s) => (
-                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem 1rem", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${s.enabled ? `${C.glow}20` : C.faint}` }}>
-                      <button onClick={() => handleToggleSchedule(s)} style={{ width: 36, height: 20, borderRadius: 10, border: "none", background: s.enabled ? C.glow : "rgba(255,255,255,0.1)", cursor: "pointer", position: "relative", transition: "background 0.3s", flexShrink: 0, alignSelf: "center" }}>
-                        <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: s.enabled ? 19 : 3, transition: "left 0.3s" }} />
-                      </button>
-                      <span style={{ flexShrink: 0, display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
-                        <span style={{ color: C.phosphor, fontSize: "0.82rem" }}>{cronToHuman(s.cron)}</span>
-                        {cronToHuman(s.cron) !== s.cron && <code style={{ color: C.faint, fontSize: "0.62rem", marginTop: "-0.05rem" }}>{s.cron}</code>}
-                      </span>
-                      <span style={{ fontSize: "0.82rem", color: C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.message || "(no message)"}</span>
-                      {s.last_run_at && <span style={{ fontSize: "0.72rem", color: C.faint, flexShrink: 0 }}>Last: {new Date(s.last_run_at).toLocaleString()}</span>}
-                      <button onClick={() => handleDeleteSchedule(s.id)} style={{ padding: "0.2rem 0.5rem", borderRadius: 6, border: "1px solid rgba(255,107,107,0.2)", background: "rgba(255,107,107,0.05)", color: C.danger, fontSize: "0.75rem", cursor: "pointer" }}>{"\u2715"}</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Add new schedule */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={labelStyle()}>Cron Expression</label>
-                    <input value={newCron} onChange={(e) => setNewCron(e.target.value)} placeholder="*/5 * * * *" style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
-                  </div>
-                  <div style={{ flex: 2 }}>
-                    <label style={labelStyle()}>Message</label>
-                    <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Check for updates" style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
-                  </div>
-                  <motion.button type="button" disabled={addingSchedule || !newCron.trim()} onClick={handleAddSchedule} whileHover={addingSchedule ? {} : { scale: 1.03 }} whileTap={addingSchedule ? {} : { scale: 0.97 }} style={{ padding: "0.65rem 1.2rem", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.82rem", fontWeight: 600, cursor: addingSchedule || !newCron.trim() ? "not-allowed" : "pointer", opacity: addingSchedule || !newCron.trim() ? 0.5 : 1, whiteSpace: "nowrap", flexShrink: 0 }}>
-                    {addingSchedule ? "..." : "+ Add"}
-                  </motion.button>
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  {[
-                    ["*/5 * * * *", "Every 5 min"],
-                    ["0 * * * *", "Hourly"],
-                    ["0 9 * * *", "Daily 9am"],
-                    ["0 9 * * 1", "Weekly Mon 9am"],
-                  ].map(([cron, label]) => (
-                    <button key={cron} type="button" onClick={() => setNewCron(cron)} style={{ padding: "0.25rem 0.6rem", borderRadius: 6, border: `1px solid ${C.faint}`, background: newCron === cron ? `${C.glow}15` : "transparent", color: newCron === cron ? C.glow : C.muted, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.75rem", cursor: "pointer" }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {scheduleError && (
-                  <div style={{ fontSize: "0.82rem", color: C.danger }}>{scheduleError}</div>
-                )}
-              </div>
-            </div>
           </div>
         )}
 
@@ -664,7 +776,7 @@ function AgentDetailContent() {
             {/* Scheduling */}
             <section style={{ borderTop: `1px solid ${C.faint}`, paddingTop: "2rem" }}>
               <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.3rem", color: "#fff", fontWeight: 400, marginBottom: "1rem" }}>Scheduling</h2>
-              <p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "1rem" }}>Add schedules in the Settings tab. Each schedule has its own cron expression and message. The agent will auto-start when a schedule fires.</p>
+              <p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "1rem" }}>Add schedules in the Schedules tab. Each schedule has its own cron expression and message. The agent will auto-start when a schedule fires.</p>
               <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem" }}>Common cron patterns:</p>
               <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.3rem 1.5rem", fontSize: "0.82rem" }}>
                 <code style={{ color: C.phosphor }}>*/5 * * * *</code><span style={{ color: C.faint }}>Every 5 minutes</span>

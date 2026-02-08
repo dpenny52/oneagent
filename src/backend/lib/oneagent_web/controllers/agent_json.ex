@@ -1,5 +1,5 @@
 defmodule OneAgentWeb.AgentJSON do
-  alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory, AgentMessage, AgentSchedule}
+  alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory, AgentMessage, AgentSchedule, AgentGoal, AgentGoalStep}
 
   def render("index.json", %{agents: agents}) do
     %{data: Enum.map(agents, &agent_data/1)}
@@ -39,6 +39,10 @@ defmodule OneAgentWeb.AgentJSON do
 
   def render("schedule.json", %{schedule: schedule}) do
     %{data: schedule_data(schedule)}
+  end
+
+  def render("goals.json", %{goals: goals}) do
+    %{data: Enum.map(goals, &goal_data/1)}
   end
 
   defp agent_data(%Agent{} = agent) do
@@ -145,6 +149,41 @@ defmodule OneAgentWeb.AgentJSON do
       last_run_at: schedule.last_run_at,
       inserted_at: schedule.inserted_at,
       updated_at: schedule.updated_at
+    }
+  end
+
+  defp goal_data(%AgentGoal{} = goal) do
+    steps =
+      case goal.steps do
+        %Ecto.Association.NotLoaded{} -> []
+        steps -> Enum.map(steps, &goal_step_data/1)
+      end
+
+    %{
+      id: goal.id,
+      title: goal.title,
+      description: goal.description,
+      status: goal.status,
+      priority: goal.priority,
+      due_date: goal.due_date,
+      review_schedule_id: goal.review_schedule_id,
+      completed_at: goal.completed_at,
+      steps: steps,
+      inserted_at: goal.inserted_at,
+      updated_at: goal.updated_at
+    }
+  end
+
+  defp goal_step_data(%AgentGoalStep{} = step) do
+    %{
+      id: step.id,
+      title: step.title,
+      description: step.description,
+      status: step.status,
+      position: step.position,
+      schedule_id: step.schedule_id,
+      result_notes: step.result_notes,
+      completed_at: step.completed_at
     }
   end
 end

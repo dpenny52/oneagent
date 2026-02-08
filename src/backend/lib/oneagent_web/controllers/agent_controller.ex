@@ -198,6 +198,17 @@ defmodule OneAgentWeb.AgentController do
     end
   end
 
+  # ── Goals ────────────────────────────────────────────────
+
+  def list_goals(conn, %{"agent_id" => id}) do
+    scope = conn.assigns.current_scope
+
+    with {:ok, agent} <- Agents.get_agent(scope, id) do
+      goals = Agents.list_goals(agent)
+      render(conn, :goals, goals: goals)
+    end
+  end
+
   @allowed_bucket_keys %{
     "bucket" => :bucket,
     "scope_config" => :scope_config,

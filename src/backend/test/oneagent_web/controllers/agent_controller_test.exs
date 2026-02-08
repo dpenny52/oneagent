@@ -313,6 +313,38 @@ defmodule OneAgentWeb.AgentControllerTest do
     end
   end
 
+  # ── Goals ──────────────────────────────────────────────────
+
+  describe "GET /api/agents/:agent_id/goals" do
+    test "lists goals with steps for agent", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+      goal = goal_fixture(agent, %{title: "My Goal", description: "Goal desc"})
+      _step = goal_step_fixture(goal, %{title: "Step 1", position: 1})
+
+      conn = get(conn, "/api/agents/#{agent.id}/goals")
+
+      assert %{"data" => [%{"id" => _, "title" => "My Goal", "description" => "Goal desc", "steps" => [%{"title" => "Step 1"}]}]} =
+        json_response(conn, 200)
+    end
+
+    test "returns empty list when no goals", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      conn = get(conn, "/api/agents/#{agent.id}/goals")
+      assert %{"data" => []} = json_response(conn, 200)
+    end
+
+    test "rejects request for another user's agent", %{conn: conn} do
+      other_scope = scope_fixture()
+      other_agent = agent_fixture(other_scope)
+
+      conn = get(conn, "/api/agents/#{other_agent.id}/goals")
+      assert json_response(conn, 404)
+    end
+  end
+
   # ── Invoke (input validation) ───────────────────────────────
 
   describe "POST /api/agents/:agent_id/invoke" do
