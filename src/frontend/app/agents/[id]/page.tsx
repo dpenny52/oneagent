@@ -217,11 +217,9 @@ function AgentDetailContent() {
   useEffect(() => {
     if (tab === "settings") {
       api.get<LlmConfig[]>("/api/llm-configs").then((r) => { if (r.ok) setConfigs(r.data); });
-      if (!schedulesLoaded) {
-        api.get<Schedule[]>(`/api/agents/${agentId}/schedules`).then((r) => { if (r.ok) { setSchedules(r.data); setSchedulesLoaded(true); } });
-      }
+      api.get<Schedule[]>(`/api/agents/${agentId}/schedules`).then((r) => { if (r.ok) { setSchedules(r.data); setSchedulesLoaded(true); } });
     }
-  }, [tab, agentId, schedulesLoaded]);
+  }, [tab, agentId]);
 
   /* ---- Scroll to bottom on new messages ---- */
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, sending]);
