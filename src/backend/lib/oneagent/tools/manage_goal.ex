@@ -6,6 +6,8 @@ defmodule OneAgent.Tools.ManageGoal do
 
   @behaviour OneAgent.Tools.Tool
 
+  @max_active_goals_per_agent 20
+
   @impl true
   def id, do: "manage_goal"
 
@@ -79,10 +81,15 @@ defmodule OneAgent.Tools.ManageGoal do
     agent = context[:agent]
     title = input["title"]
 
-    if is_nil(title) || String.trim(title) == "" do
-      {:error, "Missing required parameter: title"}
-    else
-      do_create(agent, input)
+    cond do
+      is_nil(title) || String.trim(title) == "" ->
+        {:error, "Missing required parameter: title"}
+
+      OneAgent.Agents.count_goals(agent, "active") >= @max_active_goals_per_agent ->
+        {:error, "Active goal limit reached (maximum #{@max_active_goals_per_agent} per agent). Complete, abandon, or delete existing goals before creating new ones."}
+
+      true ->
+        do_create(agent, input)
     end
   end
 

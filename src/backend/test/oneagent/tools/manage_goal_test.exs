@@ -108,6 +108,35 @@ defmodule OneAgent.Tools.ManageGoalTest do
 
       assert msg =~ "Missing required parameter: title"
     end
+
+    test "rejects creation when active goal limit reached", %{agent: agent, context: context} do
+      # Create 20 active goals (the limit)
+      for i <- 1..20 do
+        goal_fixture(agent, %{title: "Goal #{i}"})
+      end
+
+      assert {:error, msg} = Tools.execute_tool("manage_goal", %{
+        "action" => "create",
+        "title" => "One too many"
+      }, context)
+
+      assert msg =~ "Active goal limit reached"
+      assert msg =~ "maximum 20"
+    end
+
+    test "allows creation when non-active goals exist but active count is under limit", %{agent: agent, context: context} do
+      # Create goals in non-active states (these shouldn't count)
+      goal_fixture(agent, %{title: "Completed", status: "completed"})
+      goal_fixture(agent, %{title: "Paused", status: "paused"})
+      goal_fixture(agent, %{title: "Abandoned", status: "abandoned"})
+
+      assert {:ok, result} = Tools.execute_tool("manage_goal", %{
+        "action" => "create",
+        "title" => "Should succeed"
+      }, context)
+
+      assert result["action"] == "created"
+    end
   end
 
   describe "update" do

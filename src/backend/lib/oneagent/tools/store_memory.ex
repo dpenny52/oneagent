@@ -6,6 +6,8 @@ defmodule OneAgent.Tools.StoreMemory do
 
   @behaviour OneAgent.Tools.Tool
 
+  @max_memories_per_agent 500
+
   @impl true
   def id, do: "store_memory"
 
@@ -50,20 +52,28 @@ defmodule OneAgent.Tools.StoreMemory do
   def execute(input, context) do
     agent = context[:agent]
     run = context[:run]
+    key = input["key"]
 
-    attrs = %{
-      key: input["key"],
-      value: input["value"],
-      memory_type: input["memory_type"],
-      source_run_id: run && run.id
-    }
+    # Check memory count limit only for new keys (upserts on existing keys are always allowed)
+    existing = OneAgent.Agents.get_memory(agent, key)
 
-    case OneAgent.Agents.upsert_memory(agent, attrs) do
-      {:ok, memory} ->
-        {:ok, %{"key" => memory.key, "stored" => true}}
+    if is_nil(existing) and OneAgent.Agents.count_memories(agent) >= @max_memories_per_agent do
+      {:error, "Memory limit reached (maximum #{@max_memories_per_agent} per agent). Delete unused memories before storing new ones."}
+    else
+      attrs = %{
+        key: key,
+        value: input["value"],
+        memory_type: input["memory_type"],
+        source_run_id: run && run.id
+      }
 
-      {:error, changeset} ->
-        {:error, "Failed to store memory: #{OneAgent.ChangesetErrors.format(changeset)}"}
+      case OneAgent.Agents.upsert_memory(agent, attrs) do
+        {:ok, memory} ->
+          {:ok, %{"key" => memory.key, "stored" => true}}
+
+        {:error, changeset} ->
+          {:error, "Failed to store memory: #{OneAgent.ChangesetErrors.format(changeset)}"}
+      end
     end
   end
 end

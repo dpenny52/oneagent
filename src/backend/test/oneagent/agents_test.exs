@@ -309,6 +309,17 @@ defmodule OneAgent.AgentsTest do
       Agents.delete_all_memories(agent)
       assert Agents.list_memories(agent) == []
     end
+
+    test "count_memories returns correct count", %{scope: scope} do
+      agent = agent_fixture(scope)
+      assert Agents.count_memories(agent) == 0
+
+      agent_memory_fixture(agent, %{key: "k1"})
+      assert Agents.count_memories(agent) == 1
+
+      agent_memory_fixture(agent, %{key: "k2"})
+      assert Agents.count_memories(agent) == 2
+    end
   end
 
   # ── Memory Full-Text Search ───────────────────────────────
@@ -548,6 +559,17 @@ defmodule OneAgent.AgentsTest do
 
       assert schedule.message == max_message
     end
+
+    test "count_schedules returns correct count", %{scope: scope} do
+      agent = agent_fixture(scope)
+      assert Agents.count_schedules(agent) == 0
+
+      schedule_fixture(agent, %{"cron" => "*/5 * * * *", "message" => "one"})
+      assert Agents.count_schedules(agent) == 1
+
+      schedule_fixture(agent, %{"cron" => "*/10 * * * *", "message" => "two"})
+      assert Agents.count_schedules(agent) == 2
+    end
   end
 
   # ── Goals ─────────────────────────────────────────────────
@@ -691,6 +713,19 @@ defmodule OneAgent.AgentsTest do
       # Schedules should be deleted
       assert {:error, :not_found} = Agents.get_schedule(agent, step_schedule.id)
       assert {:error, :not_found} = Agents.get_schedule(agent, review_schedule.id)
+    end
+
+    test "count_goals returns count filtered by status", %{scope: scope} do
+      agent = agent_fixture(scope)
+      assert Agents.count_goals(agent, "active") == 0
+
+      _g1 = goal_fixture(agent, %{title: "Active 1"})
+      _g2 = goal_fixture(agent, %{title: "Active 2"})
+      _g3 = goal_fixture(agent, %{title: "Paused", status: "paused"})
+
+      assert Agents.count_goals(agent, "active") == 2
+      assert Agents.count_goals(agent, "paused") == 1
+      assert Agents.count_goals(agent, "completed") == 0
     end
   end
 

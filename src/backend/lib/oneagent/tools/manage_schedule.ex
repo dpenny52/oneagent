@@ -6,6 +6,8 @@ defmodule OneAgent.Tools.ManageSchedule do
 
   @behaviour OneAgent.Tools.Tool
 
+  @max_schedules_per_agent 50
+
   @impl true
   def id, do: "manage_schedule"
 
@@ -68,18 +70,22 @@ defmodule OneAgent.Tools.ManageSchedule do
         {:ok, format_schedule(existing, "already_exists")}
 
       nil ->
-        attrs =
-          %{}
-          |> maybe_put("cron", cron)
-          |> maybe_put("message", message)
-          |> maybe_put("enabled", input["enabled"])
+        if OneAgent.Agents.count_schedules(agent) >= @max_schedules_per_agent do
+          {:error, "Schedule limit reached (maximum #{@max_schedules_per_agent} per agent). Delete unused schedules before creating new ones."}
+        else
+          attrs =
+            %{}
+            |> maybe_put("cron", cron)
+            |> maybe_put("message", message)
+            |> maybe_put("enabled", input["enabled"])
 
-        case OneAgent.Agents.create_schedule(agent, attrs) do
-          {:ok, schedule} ->
-            {:ok, format_schedule(schedule, "created")}
+          case OneAgent.Agents.create_schedule(agent, attrs) do
+            {:ok, schedule} ->
+              {:ok, format_schedule(schedule, "created")}
 
-          {:error, changeset} ->
-            {:error, format_errors(changeset)}
+            {:error, changeset} ->
+              {:error, format_errors(changeset)}
+          end
         end
     end
   end

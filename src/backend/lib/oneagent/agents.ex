@@ -200,6 +200,10 @@ defmodule OneAgent.Agents do
     |> Repo.one()
   end
 
+  def count_memories(%Agent{} = agent) do
+    Repo.one(from m in AgentMemory, where: m.agent_id == ^agent.id, select: count(m.id))
+  end
+
   def upsert_memory(%Agent{} = agent, attrs) do
     attrs = Map.put(attrs, :agent_id, agent.id)
 
@@ -307,6 +311,10 @@ defmodule OneAgent.Agents do
     end
   end
 
+  def count_schedules(%Agent{} = agent) do
+    Repo.one(from s in AgentSchedule, where: s.agent_id == ^agent.id, select: count(s.id))
+  end
+
   def create_schedule(%Agent{} = agent, attrs) do
     %AgentSchedule{agent_id: agent.id}
     |> AgentSchedule.changeset(attrs)
@@ -375,6 +383,10 @@ defmodule OneAgent.Agents do
       nil -> {:error, :not_found}
       goal -> {:ok, goal}
     end
+  end
+
+  def count_goals(%Agent{} = agent, status) do
+    Repo.one(from g in AgentGoal, where: g.agent_id == ^agent.id and g.status == ^status, select: count(g.id))
   end
 
   def create_goal(%Agent{} = agent, attrs) do
