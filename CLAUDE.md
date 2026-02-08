@@ -2,6 +2,10 @@
 
 A platform to deploy persistent AI agents that live in the cloud, with a bioluminescent-themed landing page and full authenticated dashboard.
 
+## CI/CD
+
+Pushing to `main` automatically runs tests and deploys to production (Fly.io). No manual deploy step needed.
+
 ## Frontend Commands
 
 Run from the `src/frontend/` directory:
