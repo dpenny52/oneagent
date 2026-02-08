@@ -58,7 +58,34 @@ defmodule OneAgent.ToolsTest do
       assert "recall_memory" in names
       assert "list_schedules" in names
       assert "manage_schedule" in names
-      # http_request included (dynamic bucket, nil static)
+    end
+
+    test "excludes http_request when neither web_access nor data_write granted", %{scope: scope} do
+      agent = agent_fixture(scope)
+
+      defs = Tools.tool_definitions_for_agent(agent)
+      names = Enum.map(defs, & &1["name"])
+
+      refute "http_request" in names
+    end
+
+    test "includes http_request when web_access is granted", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "web_access"})
+
+      defs = Tools.tool_definitions_for_agent(agent)
+      names = Enum.map(defs, & &1["name"])
+
+      assert "http_request" in names
+    end
+
+    test "includes http_request when data_write is granted", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "data_write"})
+
+      defs = Tools.tool_definitions_for_agent(agent)
+      names = Enum.map(defs, & &1["name"])
+
       assert "http_request" in names
     end
 

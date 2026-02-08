@@ -41,8 +41,17 @@ defmodule OneAgent.Tools do
     @tools
     |> Enum.filter(fn tool_mod ->
       case tool_mod.bucket() do
-        nil -> true  # memory tools + http_request (dynamic bucket)
-        bucket -> MapSet.member?(active_buckets, to_string(bucket))
+        nil ->
+          # http_request has a dynamic bucket — only include if agent has web_access or data_write
+          if tool_mod == HttpRequest do
+            MapSet.member?(active_buckets, "web_access") or
+              MapSet.member?(active_buckets, "data_write")
+          else
+            true
+          end
+
+        bucket ->
+          MapSet.member?(active_buckets, to_string(bucket))
       end
     end)
     |> Enum.map(&tool_to_definition/1)
