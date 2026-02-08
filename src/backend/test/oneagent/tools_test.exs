@@ -901,4 +901,208 @@ defmodule OneAgent.ToolsTest do
       assert msg =~ "Missing required parameter: action"
     end
   end
+
+  describe "webhook trigger restrictions" do
+    test "blocks manage_schedule create from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "webhook"}
+
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "cron" => "*/5 * * * *",
+        "message" => "Injected schedule"
+      }, context)
+
+      assert msg =~ "not available during webhook-triggered runs"
+    end
+
+    test "blocks manage_schedule delete from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+      context = %{agent: agent, trigger: "webhook"}
+
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{
+        "action" => "delete",
+        "schedule_id" => schedule.id
+      }, context)
+
+      assert msg =~ "not available during webhook-triggered runs"
+    end
+
+    test "blocks manage_schedule update from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      schedule = schedule_fixture(agent)
+      context = %{agent: agent, trigger: "webhook"}
+
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{
+        "action" => "update",
+        "schedule_id" => schedule.id,
+        "enabled" => false
+      }, context)
+
+      assert msg =~ "not available during webhook-triggered runs"
+    end
+
+    test "blocks manage_goal create from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "webhook"}
+
+      assert {:error, msg} = Tools.execute_tool("manage_goal", %{
+        "action" => "create",
+        "title" => "Injected goal"
+      }, context)
+
+      assert msg =~ "not available during webhook-triggered runs"
+    end
+
+    test "blocks manage_goal delete from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "webhook"}
+
+      assert {:error, msg} = Tools.execute_tool("manage_goal", %{
+        "action" => "delete",
+        "goal_id" => Ecto.UUID.generate()
+      }, context)
+
+      assert msg =~ "not available during webhook-triggered runs"
+    end
+
+    test "blocks manage_goal abandon from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "webhook"}
+
+      assert {:error, msg} = Tools.execute_tool("manage_goal", %{
+        "action" => "abandon",
+        "goal_id" => Ecto.UUID.generate()
+      }, context)
+
+      assert msg =~ "not available during webhook-triggered runs"
+    end
+
+    test "blocks manage_goal_step remove from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "webhook"}
+
+      assert {:error, msg} = Tools.execute_tool("manage_goal_step", %{
+        "action" => "remove",
+        "goal_id" => Ecto.UUID.generate(),
+        "step_id" => Ecto.UUID.generate()
+      }, context)
+
+      assert msg =~ "not available during webhook-triggered runs"
+    end
+
+    test "blocks store_memory from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil, trigger: "webhook"}
+
+      assert {:error, msg} = Tools.execute_tool("store_memory", %{
+        "key" => "injected_key",
+        "value" => "injected_value",
+        "memory_type" => "fact"
+      }, context)
+
+      assert msg =~ "not available during webhook-triggered runs"
+    end
+
+    test "allows recall_memory from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil, trigger: "webhook"}
+
+      assert {:ok, result} = Tools.execute_tool("recall_memory", %{}, context)
+      assert result["count"] == 0
+    end
+
+    test "allows list_schedules from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "webhook"}
+
+      assert {:ok, result} = Tools.execute_tool("list_schedules", %{}, context)
+      assert result["count"] == 0
+    end
+
+    test "allows list_goals from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "webhook"}
+
+      assert {:ok, result} = Tools.execute_tool("list_goals", %{}, context)
+      assert result["count"] == 0
+    end
+
+    test "allows manage_schedule from manual trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "manual"}
+
+      assert {:ok, result} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "cron" => "*/5 * * * *",
+        "message" => "Allowed schedule"
+      }, context)
+
+      assert result["action"] == "created"
+    end
+
+    test "allows manage_schedule from scheduled trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "scheduled"}
+
+      assert {:ok, result} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "cron" => "0 9 * * *",
+        "message" => "Self-managed schedule"
+      }, context)
+
+      assert result["action"] == "created"
+    end
+
+    test "allows store_memory without trigger in context", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil}
+
+      assert {:ok, %{"stored" => true}} = Tools.execute_tool("store_memory", %{
+        "key" => "normal_key",
+        "value" => %{"data" => "normal_value"},
+        "memory_type" => "fact"
+      }, context)
+    end
+  end
+
+  describe "tool_definitions_for_agent/2 webhook filtering" do
+    test "excludes store_memory from tool definitions for webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+
+      defs = Tools.tool_definitions_for_agent(agent, "webhook")
+      names = Enum.map(defs, & &1["name"])
+
+      refute "store_memory" in names
+      # Read-only tools remain
+      assert "recall_memory" in names
+      assert "list_schedules" in names
+      assert "list_goals" in names
+      # Action-based tools still visible (restricted at execution time)
+      assert "manage_schedule" in names
+      assert "manage_goal" in names
+    end
+
+    test "includes all tools for manual trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+
+      defs = Tools.tool_definitions_for_agent(agent, "manual")
+      names = Enum.map(defs, & &1["name"])
+
+      assert "store_memory" in names
+      assert "recall_memory" in names
+      assert "manage_schedule" in names
+    end
+
+    test "includes all tools when trigger not specified (default)", %{scope: scope} do
+      agent = agent_fixture(scope)
+
+      defs = Tools.tool_definitions_for_agent(agent)
+      names = Enum.map(defs, & &1["name"])
+
+      assert "store_memory" in names
+      assert "recall_memory" in names
+    end
+  end
 end

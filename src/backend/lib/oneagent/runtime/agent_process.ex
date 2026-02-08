@@ -84,8 +84,8 @@ defmodule OneAgent.Runtime.AgentProcess do
     end)
     messages = history_messages ++ [%{"role" => "user", "content" => message}]
 
-    # Get tool definitions filtered by agent's buckets
-    tool_defs = Tools.tool_definitions_for_agent(agent)
+    # Get tool definitions filtered by agent's buckets (and trigger source)
+    tool_defs = Tools.tool_definitions_for_agent(agent, trigger)
 
     # Get relevant memories, schedules, and goals for context
     memories = Agents.list_memories(agent)
@@ -94,7 +94,7 @@ defmodule OneAgent.Runtime.AgentProcess do
     system = build_system_prompt(agent, memories, schedules, goals)
 
     # Run the loop
-    case agentic_loop(state, run, messages, tool_defs, system, 0, [], deadline) do
+    case agentic_loop(state, run, messages, tool_defs, system, 0, [], deadline, trigger) do
       {:ok, final_text, run} ->
         # Persist user message and assistant response to chat history
         case Agents.create_message(agent, %{role: "user", content: message, run_id: run.id, source: source}) do
@@ -115,7 +115,7 @@ defmodule OneAgent.Runtime.AgentProcess do
     end
   end
 
-  defp agentic_loop(state, run, messages, tool_defs, system, step_count, prev_tools, deadline) do
+  defp agentic_loop(state, run, messages, tool_defs, system, step_count, prev_tools, deadline, trigger) do
     agent = state.agent
 
     cond do
@@ -188,7 +188,7 @@ defmodule OneAgent.Runtime.AgentProcess do
                 ]
 
                 # Pass empty tools list to force text-only response
-                agentic_loop(state, run, retry_messages, [], system, step_count + 1, prev_tools, deadline)
+                agentic_loop(state, run, retry_messages, [], system, step_count + 1, prev_tools, deadline, trigger)
               else
                 final_text = if final_text == "", do: "[Agent produced no response]", else: final_text
 
@@ -218,11 +218,11 @@ defmodule OneAgent.Runtime.AgentProcess do
                   nudge
                 ]
 
-                agentic_loop(state, run, nudge_messages, [], system, step_count + 1, current_tools, deadline)
+                agentic_loop(state, run, nudge_messages, [], system, step_count + 1, current_tools, deadline, trigger)
               else
                 # Execute tools and continue loop
                 {tool_results, new_step_count} =
-                  execute_tool_calls(state, run, tool_uses, step_count + 1)
+                  execute_tool_calls(state, run, tool_uses, step_count + 1, trigger)
 
                 # Loop back to LLM for a text response
                 assistant_content = Enum.map(response.content, fn
@@ -244,7 +244,7 @@ defmodule OneAgent.Runtime.AgentProcess do
                   %{"role" => "user", "content" => tool_result_msgs}
                 ]
 
-                agentic_loop(state, run, updated_messages, tool_defs, system, new_step_count, current_tools, deadline)
+                agentic_loop(state, run, updated_messages, tool_defs, system, new_step_count, current_tools, deadline, trigger)
               end
             end
 
@@ -262,12 +262,13 @@ defmodule OneAgent.Runtime.AgentProcess do
     end
   end
 
-  defp execute_tool_calls(state, run, tool_uses, step_count) do
+  defp execute_tool_calls(state, run, tool_uses, step_count, trigger) do
     agent = state.agent
 
     context = %{
       agent: agent,
       run: run,
+      trigger: trigger,
       user_email: nil # Could be enriched with user data
     }
 

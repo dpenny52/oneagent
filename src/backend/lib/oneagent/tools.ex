@@ -23,6 +23,16 @@ defmodule OneAgent.Tools do
     OneAgent.Tools.ListGoals
   ]
 
+  # Actions restricted for webhook-triggered runs to mitigate prompt injection.
+  # External messages (e.g., WhatsApp) should not be able to manipulate the
+  # agent's internal configuration (schedules, goals, memories).
+  @webhook_restricted_actions %{
+    "manage_schedule" => MapSet.new(["delete", "update", "create"]),
+    "manage_goal" => MapSet.new(["delete", "abandon", "complete", "pause", "create"]),
+    "manage_goal_step" => MapSet.new(["remove", "skip", "complete", "add", "add_schedule", "remove_schedule"]),
+    "store_memory" => :all
+  }
+
   @doc """
   Returns all registered tool modules.
   """
@@ -31,28 +41,44 @@ defmodule OneAgent.Tools do
   @doc """
   Returns tool definitions for the LLM, filtered to only tools
   in the agent's approved buckets. Memory tools always included.
+
+  When `trigger` is `"webhook"`, management tools (schedule, goal, memory)
+  are excluded to prevent prompt injection via external messages.
   """
-  def tool_definitions_for_agent(agent) do
+  def tool_definitions_for_agent(agent, trigger \\ "manual") do
     active_buckets =
       Agents.list_active_buckets(agent)
       |> Enum.map(& &1.bucket)
       |> MapSet.new()
 
+    # Tools fully restricted for webhook triggers (all actions blocked)
+    webhook_excluded_tools =
+      if trigger == "webhook" do
+        @webhook_restricted_actions
+        |> Enum.filter(fn {_id, restriction} -> restriction == :all end)
+        |> Enum.map(fn {id, _} -> id end)
+        |> MapSet.new()
+      else
+        MapSet.new()
+      end
+
     @tools
     |> Enum.filter(fn tool_mod ->
-      case tool_mod.bucket() do
-        nil ->
-          # http_request has a dynamic bucket — only include if agent has web_access or data_write
-          if tool_mod == HttpRequest do
-            MapSet.member?(active_buckets, "web_access") or
-              MapSet.member?(active_buckets, "data_write")
-          else
-            true
-          end
+      # Exclude tools fully restricted for webhook triggers
+      not MapSet.member?(webhook_excluded_tools, tool_mod.id()) and
+        case tool_mod.bucket() do
+          nil ->
+            # http_request has a dynamic bucket — only include if agent has web_access or data_write
+            if tool_mod == HttpRequest do
+              MapSet.member?(active_buckets, "web_access") or
+                MapSet.member?(active_buckets, "data_write")
+            else
+              true
+            end
 
-        bucket ->
-          MapSet.member?(active_buckets, to_string(bucket))
-      end
+          bucket ->
+            MapSet.member?(active_buckets, to_string(bucket))
+        end
     end)
     |> Enum.map(&tool_to_definition/1)
   end
@@ -75,22 +101,38 @@ defmodule OneAgent.Tools do
         {:error, "Unknown tool: #{tool_id}"}
 
       tool_mod ->
-        required_bucket = resolve_bucket(tool_mod, input)
+        # Check webhook restrictions before executing
+        if webhook_restricted?(tool_id, input, context) do
+          {:error, "This action is not available during webhook-triggered runs"}
+        else
+          required_bucket = resolve_bucket(tool_mod, input)
 
-        cond do
-          # No bucket required (memory tools)
-          required_bucket == nil ->
-            tool_mod.execute(input, context)
+          cond do
+            # No bucket required (memory/management tools)
+            required_bucket == nil ->
+              tool_mod.execute(input, context)
 
-          # Check if agent has the required bucket
-          not Agents.has_bucket?(agent, to_string(required_bucket)) ->
-            {:error, "Permission denied: agent does not have the '#{required_bucket}' permission bucket"}
+            # Check if agent has the required bucket
+            not Agents.has_bucket?(agent, to_string(required_bucket)) ->
+              {:error, "Permission denied: agent does not have the '#{required_bucket}' permission bucket"}
 
-          true ->
-            context = maybe_inject_credential(context, agent, to_string(required_bucket))
-            tool_mod.execute(input, context)
+            true ->
+              context = maybe_inject_credential(context, agent, to_string(required_bucket))
+              tool_mod.execute(input, context)
+          end
         end
     end
+  end
+
+  defp webhook_restricted?(tool_id, input, context) do
+    trigger = Map.get(context, :trigger)
+
+    trigger == "webhook" and
+      case Map.get(@webhook_restricted_actions, tool_id) do
+        nil -> false
+        :all -> true
+        actions -> MapSet.member?(actions, input["action"])
+      end
   end
 
   defp resolve_bucket(HttpRequest, input), do: HttpRequest.bucket_for_input(input)
