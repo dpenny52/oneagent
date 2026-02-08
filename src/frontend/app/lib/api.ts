@@ -26,7 +26,9 @@ async function request<T>(
     });
 
     if (res.status === 401) {
-      if (typeof window !== "undefined") {
+      // Don't auto-redirect for auth check — it legitimately returns 401
+      // for unauthenticated users on public pages.
+      if (typeof window !== "undefined" && path !== "/api/auth/me") {
         window.location.href = "/login";
       }
       return { ok: false, error: "Unauthorized", status: 401 };
