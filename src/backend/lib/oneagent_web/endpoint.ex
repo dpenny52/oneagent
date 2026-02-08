@@ -46,6 +46,7 @@ defmodule OneAgentWeb.Endpoint do
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
+    length: 1_000_000,
     body_reader: {OneAgentWeb.Plugs.CacheRawBody, :read_body, []},
     json_decoder: Phoenix.json_library()
 
