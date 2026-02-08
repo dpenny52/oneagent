@@ -9,6 +9,13 @@ defmodule OneAgent.Runtime.AgentProcess do
 
   alias OneAgent.{Agents, Credentials, LLM, Tools}
 
+  # Maximum wall-clock time for a single agent run (default: 2 minutes)
+  @default_max_run_duration_ms 120_000
+
+  defp max_run_duration_ms do
+    Application.get_env(:oneagent, :max_run_duration_ms, @default_max_run_duration_ms)
+  end
+
   defstruct [:agent, :llm_config, :api_key]
 
   # ── Client API ───────────────────────────────────────────────
@@ -21,7 +28,7 @@ defmodule OneAgent.Runtime.AgentProcess do
 
   def invoke(agent_id, message, trigger \\ "manual") do
     case Registry.lookup(OneAgent.Runtime.AgentRegistry, agent_id) do
-      [{pid, _}] -> GenServer.call(pid, {:invoke, message, trigger}, 300_000)
+      [{pid, _}] -> GenServer.call(pid, {:invoke, message, trigger}, max_run_duration_ms() + 30_000)
       [] -> {:error, :not_running}
     end
   end
@@ -64,6 +71,7 @@ defmodule OneAgent.Runtime.AgentProcess do
   defp do_run(state, message, trigger) do
     agent = state.agent
     source = trigger_to_source(trigger)
+    deadline = System.monotonic_time(:millisecond) + max_run_duration_ms()
 
     # Create run record
     {:ok, run} = Agents.create_run(agent, %{trigger: trigger})
@@ -86,7 +94,7 @@ defmodule OneAgent.Runtime.AgentProcess do
     system = build_system_prompt(agent, memories, schedules, goals)
 
     # Run the loop
-    case agentic_loop(state, run, messages, tool_defs, system, 0, []) do
+    case agentic_loop(state, run, messages, tool_defs, system, 0, [], deadline) do
       {:ok, final_text, run} ->
         # Persist user message and assistant response to chat history
         case Agents.create_message(agent, %{role: "user", content: message, run_id: run.id, source: source}) do
@@ -107,144 +115,150 @@ defmodule OneAgent.Runtime.AgentProcess do
     end
   end
 
-  defp agentic_loop(state, run, messages, tool_defs, system, step_count, prev_tools \\ []) do
+  defp agentic_loop(state, run, messages, tool_defs, system, step_count, prev_tools, deadline) do
     agent = state.agent
 
-    if step_count >= agent.max_steps_per_run do
-      {:ok, run} = Agents.complete_run(run, %{total_steps: step_count})
-      {:ok, "[Max steps reached (#{agent.max_steps_per_run})]", run}
-    else
-      start_time = System.monotonic_time(:millisecond)
+    cond do
+      step_count >= agent.max_steps_per_run ->
+        {:ok, run} = Agents.complete_run(run, %{total_steps: step_count})
+        {:ok, "[Max steps reached (#{agent.max_steps_per_run})]", run}
 
-      # Call LLM
-      llm_result = LLM.chat(
-        agent.model_provider,
-        state.api_key,
-        agent.model_id,
-        messages,
-        system: system,
-        tools: tool_defs,
-        max_tokens: Map.get(agent.model_config, "max_tokens", 4096)
-      )
+      System.monotonic_time(:millisecond) >= deadline ->
+        {:ok, run} = Agents.complete_run(run, %{total_steps: step_count})
+        {:ok, "[Run timed out after #{div(max_run_duration_ms(), 1000)} seconds]", run}
 
-      duration_ms = System.monotonic_time(:millisecond) - start_time
+      true ->
+        start_time = System.monotonic_time(:millisecond)
 
-      case llm_result do
-        {:ok, response} ->
-          # Log LLM call step
-          tokens = response.usage.input_tokens + response.usage.output_tokens
-          {:ok, _step} = Agents.create_step(run, %{
-            step_number: step_count + 1,
-            step_type: "llm_call",
-            input: %{"message_count" => length(messages)},
-            output: %{"stop_reason" => response.stop_reason, "content_blocks" => length(response.content)},
-            tokens_used: tokens,
-            duration_ms: duration_ms
-          })
+        # Call LLM
+        llm_result = LLM.chat(
+          agent.model_provider,
+          state.api_key,
+          agent.model_id,
+          messages,
+          system: system,
+          tools: tool_defs,
+          max_tokens: Map.get(agent.model_config, "max_tokens", 4096)
+        )
 
-          # Check for tool use
-          tool_uses = Enum.filter(response.content, &(&1.type == :tool_use))
+        duration_ms = System.monotonic_time(:millisecond) - start_time
 
-          if tool_uses == [] do
-            # No tool use — extract text and complete
-            final_text = response.content
-              |> Enum.filter(&(&1.type == :text))
-              |> Enum.map(& &1.text)
-              |> Enum.join("\n")
+        case llm_result do
+          {:ok, response} ->
+            # Log LLM call step
+            tokens = response.usage.input_tokens + response.usage.output_tokens
+            {:ok, _step} = Agents.create_step(run, %{
+              step_number: step_count + 1,
+              step_type: "llm_call",
+              input: %{"message_count" => length(messages)},
+              output: %{"stop_reason" => response.stop_reason, "content_blocks" => length(response.content)},
+              tokens_used: tokens,
+              duration_ms: duration_ms
+            })
 
-            # LLM sometimes returns empty content after tool use — retry once WITHOUT tools,
-            # including recent tool results so the LLM has context to form a response
-            if final_text == "" and step_count > 0 and step_count < agent.max_steps_per_run - 1 do
-              Logger.warning("LLM returned empty content for agent #{agent.id}, retrying without tools")
+            # Check for tool use
+            tool_uses = Enum.filter(response.content, &(&1.type == :tool_use))
 
-              tool_summary = extract_recent_tool_results(messages)
+            if tool_uses == [] do
+              # No tool use — extract text and complete
+              final_text = response.content
+                |> Enum.filter(&(&1.type == :text))
+                |> Enum.map(& &1.text)
+                |> Enum.join("\n")
 
-              nudge_text = case tool_summary do
-                "" -> "[System: Please respond with a text message to the user.]"
-                summary -> "[System: Your tool call returned: #{summary}. Please tell the user about these results.]"
+              # LLM sometimes returns empty content after tool use — retry once WITHOUT tools,
+              # including recent tool results so the LLM has context to form a response
+              if final_text == "" and step_count > 0 and step_count < agent.max_steps_per_run - 1 do
+                Logger.warning("LLM returned empty content for agent #{agent.id}, retrying without tools")
+
+                tool_summary = extract_recent_tool_results(messages)
+
+                nudge_text = case tool_summary do
+                  "" -> "[System: Please respond with a text message to the user.]"
+                  summary -> "[System: Your tool call returned: #{summary}. Please tell the user about these results.]"
+                end
+
+                nudge = %{"role" => "user", "content" => [
+                  %{"type" => "text", "text" => nudge_text}
+                ]}
+
+                retry_messages = messages ++ [
+                  %{"role" => "assistant", "content" => []},
+                  nudge
+                ]
+
+                # Pass empty tools list to force text-only response
+                agentic_loop(state, run, retry_messages, [], system, step_count + 1, prev_tools, deadline)
+              else
+                final_text = if final_text == "", do: "[Agent produced no response]", else: final_text
+
+                {:ok, run} = Agents.complete_run(run, %{
+                  total_steps: step_count + 1,
+                  total_tokens_used: tokens
+                })
+
+                {:ok, final_text, run}
               end
-
-              nudge = %{"role" => "user", "content" => [
-                %{"type" => "text", "text" => nudge_text}
-              ]}
-
-              retry_messages = messages ++ [
-                %{"role" => "assistant", "content" => []},
-                nudge
-              ]
-
-              # Pass empty tools list to force text-only response
-              agentic_loop(state, run, retry_messages, [], system, step_count + 1, prev_tools)
             else
-              final_text = if final_text == "", do: "[Agent produced no response]", else: final_text
+              current_tools = tool_uses |> Enum.map(& &1.name) |> Enum.sort()
 
-              {:ok, run} = Agents.complete_run(run, %{
-                total_steps: step_count + 1,
-                total_tokens_used: tokens
-              })
+              # Detect repeated tool calls BEFORE executing — if LLM is calling the
+              # same tools as last round, skip execution and nudge with previous results
+              if current_tools == prev_tools and prev_tools != [] do
+                Logger.warning("Agent #{agent.id} repeated tool calls #{inspect(current_tools)}, skipping and forcing text response")
 
-              {:ok, final_text, run}
+                prev_tool_summary = extract_recent_tool_results(messages)
+
+                nudge = %{"role" => "user", "content" => [
+                  %{"type" => "text", "text" => "[System: You already completed this action successfully. The results were: #{prev_tool_summary}. Do NOT call any more tools. Respond to the user confirming what you did.]"}
+                ]}
+
+                nudge_messages = messages ++ [
+                  %{"role" => "assistant", "content" => []},
+                  nudge
+                ]
+
+                agentic_loop(state, run, nudge_messages, [], system, step_count + 1, current_tools, deadline)
+              else
+                # Execute tools and continue loop
+                {tool_results, new_step_count} =
+                  execute_tool_calls(state, run, tool_uses, step_count + 1)
+
+                # Loop back to LLM for a text response
+                assistant_content = Enum.map(response.content, fn
+                  %{type: :text, text: text} -> %{"type" => "text", "text" => text}
+                  %{type: :tool_use, id: id, name: name, input: input} ->
+                    %{"type" => "tool_use", "id" => id, "name" => name, "input" => input}
+                end)
+
+                tool_result_msgs = Enum.map(tool_results, fn {tool_use_id, result} ->
+                  %{
+                    "type" => "tool_result",
+                    "tool_use_id" => tool_use_id,
+                    "content" => Jason.encode!(result)
+                  }
+                end)
+
+                updated_messages = messages ++ [
+                  %{"role" => "assistant", "content" => assistant_content},
+                  %{"role" => "user", "content" => tool_result_msgs}
+                ]
+
+                agentic_loop(state, run, updated_messages, tool_defs, system, new_step_count, current_tools, deadline)
+              end
             end
-          else
-            current_tools = tool_uses |> Enum.map(& &1.name) |> Enum.sort()
 
-            # Detect repeated tool calls BEFORE executing — if LLM is calling the
-            # same tools as last round, skip execution and nudge with previous results
-            if current_tools == prev_tools and prev_tools != [] do
-              Logger.warning("Agent #{agent.id} repeated tool calls #{inspect(current_tools)}, skipping and forcing text response")
+          {:error, reason} ->
+            Agents.create_step(run, %{
+              step_number: step_count + 1,
+              step_type: "error",
+              output: %{"error" => reason},
+              duration_ms: duration_ms,
+              status: "failed"
+            })
 
-              prev_tool_summary = extract_recent_tool_results(messages)
-
-              nudge = %{"role" => "user", "content" => [
-                %{"type" => "text", "text" => "[System: You already completed this action successfully. The results were: #{prev_tool_summary}. Do NOT call any more tools. Respond to the user confirming what you did.]"}
-              ]}
-
-              nudge_messages = messages ++ [
-                %{"role" => "assistant", "content" => []},
-                nudge
-              ]
-
-              agentic_loop(state, run, nudge_messages, [], system, step_count + 1, current_tools)
-            else
-              # Execute tools and continue loop
-              {tool_results, new_step_count} =
-                execute_tool_calls(state, run, tool_uses, step_count + 1)
-
-              # Loop back to LLM for a text response
-              assistant_content = Enum.map(response.content, fn
-                %{type: :text, text: text} -> %{"type" => "text", "text" => text}
-                %{type: :tool_use, id: id, name: name, input: input} ->
-                  %{"type" => "tool_use", "id" => id, "name" => name, "input" => input}
-              end)
-
-              tool_result_msgs = Enum.map(tool_results, fn {tool_use_id, result} ->
-                %{
-                  "type" => "tool_result",
-                  "tool_use_id" => tool_use_id,
-                  "content" => Jason.encode!(result)
-                }
-              end)
-
-              updated_messages = messages ++ [
-                %{"role" => "assistant", "content" => assistant_content},
-                %{"role" => "user", "content" => tool_result_msgs}
-              ]
-
-              agentic_loop(state, run, updated_messages, tool_defs, system, new_step_count, current_tools)
-            end
-          end
-
-        {:error, reason} ->
-          Agents.create_step(run, %{
-            step_number: step_count + 1,
-            step_type: "error",
-            output: %{"error" => reason},
-            duration_ms: duration_ms,
-            status: "failed"
-          })
-
-          {:error, reason, run}
-      end
+            {:error, reason, run}
+        end
     end
   end
 
