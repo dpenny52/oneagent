@@ -15,17 +15,21 @@ defmodule OneAgent.ToolsTest do
   describe "all_tools/0" do
     test "returns all registered tools" do
       tools = Tools.all_tools()
-      assert length(tools) == 8
+      assert length(tools) == 12
 
       ids = Enum.map(tools, & &1.id())
       assert "http_request" in ids
       assert "read_webpage" in ids
       assert "send_email" in ids
       assert "check_email" in ids
+      assert "web_search" in ids
       assert "store_memory" in ids
       assert "recall_memory" in ids
       assert "list_schedules" in ids
       assert "manage_schedule" in ids
+      assert "manage_goal" in ids
+      assert "manage_goal_step" in ids
+      assert "list_goals" in ids
     end
   end
 
@@ -99,6 +103,25 @@ defmodule OneAgent.ToolsTest do
       names = Enum.map(defs, & &1["name"])
 
       refute "check_email" in names
+    end
+
+    test "includes web_search when web_search bucket is granted", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "web_search"})
+
+      defs = Tools.tool_definitions_for_agent(agent)
+      names = Enum.map(defs, & &1["name"])
+
+      assert "web_search" in names
+    end
+
+    test "excludes web_search when web_search bucket not granted", %{scope: scope} do
+      agent = agent_fixture(scope)
+
+      defs = Tools.tool_definitions_for_agent(agent)
+      names = Enum.map(defs, & &1["name"])
+
+      refute "web_search" in names
     end
   end
 
@@ -522,6 +545,68 @@ defmodule OneAgent.ToolsTest do
       assert {:ok, result} = Tools.execute_tool("recall_memory", %{"key" => "  test_key  "}, context)
       assert result["found"] == true
       assert result["key"] == "test_key"
+    end
+
+    test "recall with search finds matching memories", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil}
+
+      Tools.execute_tool("store_memory", %{
+        "key" => "user_preference", "value" => %{"likes" => "dark chocolate"}, "memory_type" => "preference"
+      }, context)
+
+      Tools.execute_tool("store_memory", %{
+        "key" => "random_fact", "value" => %{"info" => "the sky is blue"}, "memory_type" => "fact"
+      }, context)
+
+      assert {:ok, result} = Tools.execute_tool("recall_memory", %{"search" => "chocolate"}, context)
+      assert result["count"] == 1
+      assert result["query"] == "chocolate"
+      [item] = result["memories"]
+      assert item["key"] == "user_preference"
+      assert is_number(item["relevance"])
+    end
+
+    test "recall with search returns empty for no matches", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil}
+
+      Tools.execute_tool("store_memory", %{
+        "key" => "k1", "value" => %{"a" => "hello"}, "memory_type" => "fact"
+      }, context)
+
+      assert {:ok, result} = Tools.execute_tool("recall_memory", %{"search" => "xylophone"}, context)
+      assert result["count"] == 0
+      assert result["memories"] == []
+    end
+
+    test "recall key takes priority over search", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil}
+
+      Tools.execute_tool("store_memory", %{
+        "key" => "specific_key", "value" => %{"data" => "specific"}, "memory_type" => "fact"
+      }, context)
+
+      # Both key and search provided — key wins
+      assert {:ok, result} = Tools.execute_tool("recall_memory", %{"key" => "specific_key", "search" => "specific"}, context)
+      assert result["found"] == true
+      assert result["key"] == "specific_key"
+      refute Map.has_key?(result, "memories")
+    end
+
+    test "recall empty search falls through to list-all", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil}
+
+      Tools.execute_tool("store_memory", %{
+        "key" => "k1", "value" => %{"a" => 1}, "memory_type" => "fact"
+      }, context)
+
+      assert {:ok, result} = Tools.execute_tool("recall_memory", %{"search" => "  "}, context)
+      assert result["count"] == 1
+      assert is_list(result["memories"])
+      refute Map.has_key?(result, "query")
     end
   end
 

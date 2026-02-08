@@ -134,15 +134,55 @@ Agents support multiple cron schedules via the `agent_schedules` table. Each sch
 
 **Config:** Create schedules via `POST /api/agents/:id/schedules` with `{"schedule": {"cron": "*/5 * * * *", "message": "Check for updates"}}`. Agent must have an `llm_config_id` assigned. No manual start needed — schedules fire automatically.
 
+### Goals & Plan Tracking
+
+Agents can create structured goals with steps to track multi-step objectives proactively.
+
+**Schema:**
+- `agent_goals` table: id, agent_id, title, description, status (active/completed/paused/abandoned), priority, source_run_id, review_schedule_id, completed_at, due_date, metadata
+- `agent_goal_steps` table: id, goal_id, title, description, status (pending/in_progress/completed/skipped), position, schedule_id, completed_at, result_notes
+
+**Key design decisions:**
+- Goals are internal to the agent — no permission bucket required, no API endpoints
+- Each goal auto-creates an hourly review schedule (`0 * * * *`) linked via `review_schedule_id`
+- Steps can have linked cron schedules via `schedule_id` for periodic execution
+- `ScheduledExecution` enriches messages with goal context: step-linked schedules get step context, review schedules get review instructions
+- Complete/abandon disables all associated schedules; delete removes them entirely
+- Active goals (up to 10) appear in the system prompt with step progress and schedule info
+- All goal/step tool responses include anti-loop `note` fields
+
 ### Agent Tools
 
 Tools are registered in `OneAgent.Tools` and exposed to the LLM filtered by the agent's active permission buckets. Tools with `bucket: nil` are always available.
 
-**Available tools:** `http_request` (dynamic bucket), `read_webpage` (web_access), `send_email` (email), `check_email` (gmail), `store_memory` (nil), `recall_memory` (nil), `list_schedules` (nil), `manage_schedule` (nil).
+**Available tools (12 total):**
+- `http_request` (dynamic bucket) — HTTP requests with SSRF protection
+- `read_webpage` (web_access) — fetch and extract text from web pages
+- `send_email` (email) — send emails with validation
+- `check_email` (gmail) — read Gmail via OAuth2
+- `web_search` (web_search) — search the web via Tavily API
+- `store_memory` (nil) — persist key-value memories
+- `recall_memory` (nil) — recall by key, keyword search, or list all
+- `list_schedules` (nil) — list cron schedules
+- `manage_schedule` (nil) — create/update/delete schedules
+- `manage_goal` (nil) — create/update/complete/pause/resume/abandon/delete goals
+- `manage_goal_step` (nil) — add/update/complete/skip/reorder/remove steps + manage step schedules
+- `list_goals` (nil) — list goals with progress, or get single goal detail
 
 **Schedule tools:** `list_schedules` returns all/enabled schedules. `manage_schedule` supports create/update/delete actions with dedup on create (same cron+message returns `already_exists`).
 
 **Gmail tool:** `check_email` supports `list` (search with Gmail query syntax, optional `max_results`) and `read` (by `message_id`). Requires `gmail` bucket with an OAuth credential containing a refresh_token. Token refresh happens on each execute using app-level client_id/secret.
+
+**Web search tool:** `web_search` POSTs to Tavily API with the API key in the JSON body. Params: query (required, max 2000 chars), max_results (default 5, max 10), search_depth (basic/advanced), include_domains, exclude_domains. Requires `web_search` bucket with a Tavily API key credential.
+
+**Memory search:** `recall_memory` supports a `search` parameter for PostgreSQL full-text search (FTS) across keys, values, and memory types. Uses `websearch_to_tsquery` for Google-style syntax (quoted phrases, OR, -exclude). Priority order: key > search > list-all. The `agent_memories` table has a `search_ts` tsvector column with a GIN index, auto-populated by a BEFORE INSERT OR UPDATE trigger with weighted vectors (key=A, value=B, type=C).
+
+**Goal tools:** Goals track multi-step objectives with auto-review schedules.
+- `manage_goal` creates goals with inline steps (each step can have a cron schedule). Auto-creates an hourly review schedule linked via `review_schedule_id`.
+- `manage_goal_step` manages individual steps: add (with optional cron), update, complete, skip, reorder, remove, add_schedule, remove_schedule.
+- `list_goals` returns active goals by default with progress counts; `goal_id` param for single goal detail.
+- Complete/abandon disables all associated schedules (review + step-linked). Delete removes schedules entirely.
+- All tool responses include anti-loop `note` fields.
 
 ### Agentic Loop
 
@@ -242,7 +282,7 @@ Run through these flows using the Chrome MCP tools (`tabs_context_mcp`, `navigat
 
 #### 7. Agent Detail — Permissions Tab
 - Click "Permissions" tab
-- Verify 6 bucket cards (web_access, email, spending, communication, data_write, gmail)
+- Verify 7 bucket cards (web_access, email, spending, communication, data_write, gmail, web_search)
 - Toggle one on → verify toggle turns green, credential dropdown appears
 - Click "Save Permissions"
 

@@ -86,6 +86,28 @@ defmodule OneAgent.AgentsFixtures do
     message
   end
 
+  def goal_fixture(agent, attrs \\ %{}) do
+    attrs = Map.merge(%{
+      title: "Test Goal #{System.unique_integer([:positive])}",
+      description: "A test goal",
+      status: "active",
+      priority: 0
+    }, attrs)
+
+    {:ok, goal} = Agents.create_goal(agent, attrs)
+    goal
+  end
+
+  def goal_step_fixture(goal, attrs \\ %{}) do
+    attrs = Map.merge(%{
+      title: "Test Step #{System.unique_integer([:positive])}",
+      description: "A test step"
+    }, attrs)
+
+    {:ok, step} = Agents.create_goal_step(goal, attrs)
+    step
+  end
+
   def scope_fixture do
     user = AccountsFixtures.confirmed_user_fixture()
     OneAgent.Accounts.Scope.for_user(user)

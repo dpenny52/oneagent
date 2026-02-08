@@ -13,10 +13,14 @@ defmodule OneAgent.Tools do
     OneAgent.Tools.ReadWebpage,
     OneAgent.Tools.SendEmail,
     OneAgent.Tools.CheckEmail,
+    OneAgent.Tools.WebSearch,
     OneAgent.Tools.StoreMemory,
     OneAgent.Tools.RecallMemory,
     OneAgent.Tools.ListSchedules,
-    OneAgent.Tools.ManageSchedule
+    OneAgent.Tools.ManageSchedule,
+    OneAgent.Tools.ManageGoal,
+    OneAgent.Tools.ManageGoalStep,
+    OneAgent.Tools.ListGoals
   ]
 
   @doc """

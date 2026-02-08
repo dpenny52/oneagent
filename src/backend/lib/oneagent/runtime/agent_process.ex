@@ -79,10 +79,11 @@ defmodule OneAgent.Runtime.AgentProcess do
     # Get tool definitions filtered by agent's buckets
     tool_defs = Tools.tool_definitions_for_agent(agent)
 
-    # Get relevant memories and schedules for context
+    # Get relevant memories, schedules, and goals for context
     memories = Agents.list_memories(agent)
     schedules = Agents.list_schedules(agent)
-    system = build_system_prompt(agent, memories, schedules)
+    goals = Agents.list_goals(agent, status: "active")
+    system = build_system_prompt(agent, memories, schedules, goals)
 
     # Run the loop
     case agentic_loop(state, run, messages, tool_defs, system, 0, []) do
@@ -299,7 +300,7 @@ defmodule OneAgent.Runtime.AgentProcess do
     {Enum.reverse(results), final_step}
   end
 
-  defp build_system_prompt(agent, memories, schedules) do
+  defp build_system_prompt(agent, memories, schedules, goals) do
     memory_section = case memories do
       [] -> ""
       mems ->
@@ -321,13 +322,59 @@ defmodule OneAgent.Runtime.AgentProcess do
         "\n\n## Your Schedules\n#{Enum.join(items, "\n")}"
     end
 
+    # Cap at 10 active goals to prevent token bloat
+    goals_section = case Enum.take(goals, 10) do
+      [] -> ""
+      active_goals ->
+        items = Enum.map(active_goals, fn goal ->
+          steps = goal.steps || []
+          completed = Enum.count(steps, &(&1.status == "completed"))
+
+          priority_label = cond do
+            goal.priority >= 3 -> "HIGH"
+            goal.priority >= 1 -> "MED"
+            true -> "LOW"
+          end
+
+          review_info = case goal.review_schedule do
+            %{cron: cron, id: id} -> "\n  Review: #{cron} (schedule: #{id})"
+            _ -> ""
+          end
+
+          due_info = if goal.due_date, do: "\n  Due: #{DateTime.to_iso8601(goal.due_date)}", else: ""
+
+          step_lines = Enum.map(steps, fn s ->
+            status_icon = case s.status do
+              "completed" -> "DONE"
+              "in_progress" -> "IN PROGRESS"
+              "skipped" -> "SKIPPED"
+              _ -> " "
+            end
+
+            notes = if s.result_notes, do: " — \"#{s.result_notes}\"", else: ""
+            sched_info = if s.schedule_id, do: " (schedule: #{s.schedule_id})", else: ""
+
+            "  #{s.position}. [#{status_icon}] #{s.title}#{notes}#{sched_info}"
+          end)
+
+          """
+          ### [#{priority_label}] #{goal.title} (goal_id: #{goal.id})#{review_info}#{due_info}
+            Progress: #{completed}/#{length(steps)} steps completed
+          #{Enum.join(step_lines, "\n")}
+          """
+        end)
+
+        "\n\n## Your Goals\n#{Enum.join(items, "\n")}"
+    end
+
     context_section = """
 
     ## How Your Memory Works
     - Your conversation history (the last #{agent.max_history_messages} messages) is included in this conversation. \
     For recent questions like "what did I just ask?", refer to the messages above — do NOT use recall_memory for that.
     - Use store_memory to save important facts, preferences, or patterns that should persist beyond the conversation window.
-    - Use recall_memory only when you need to retrieve something you previously stored with store_memory.
+    - Use recall_memory only when you need to retrieve something you previously stored with store_memory. \
+    You can also use recall_memory with the "search" parameter to find memories by keyword.
     - Always respond with a text message. Never end your turn silently after using a tool.
 
     ## Schedule Management
@@ -338,13 +385,23 @@ defmodule OneAgent.Runtime.AgentProcess do
     - IMPORTANT: After a manage_schedule call succeeds, immediately respond with a text message confirming the action. \
     Never call manage_schedule again after a successful result — one call per action is all you need.
 
+    ## Goal Management
+    - When a user gives you a vague objective (like "help me find a job"), create a goal with concrete steps using manage_goal. \
+    Include cron expressions on steps that need periodic execution.
+    - Each goal gets an automatic hourly review schedule. During reviews: check step progress, update statuses, \
+    create/remove step schedules as needed, and take the next action.
+    - If hourly review is too frequent for a goal, use manage_schedule to change the review schedule's cron (e.g., to daily "0 9 * * *").
+    - Use manage_goal_step to add, update, complete, skip, or remove individual steps. Use list_goals to see current progress.
+    - IMPORTANT: After creating or modifying a goal, immediately respond with a text message describing your plan. \
+    Do NOT call goal tools again after a successful result.
+
     ## Scheduled Execution Context
     - When you run on a schedule, your messages are NOT stored in conversation history.
     - If you discover important information during a scheduled run, use store_memory to save it.
     - Your stored memories persist across all runs and are always available above.
     """
 
-    agent.system_prompt <> context_section <> memory_section <> schedule_section
+    agent.system_prompt <> context_section <> memory_section <> schedule_section <> goals_section
   end
 
   # Extracts the most recent tool_result content from the message history

@@ -14,7 +14,7 @@ defmodule OneAgent.Tools.RecallMemory do
 
   @impl true
   def description do
-    "Recall information from your persistent memory. Use a specific key to retrieve a memory, or leave key empty to list all memories."
+    "Recall information from your persistent memory. Use a specific key to retrieve a memory, use search to find memories by keyword, or leave both empty to list all memories."
   end
 
   @impl true
@@ -27,7 +27,11 @@ defmodule OneAgent.Tools.RecallMemory do
       "properties" => %{
         "key" => %{
           "type" => "string",
-          "description" => "The key of the memory to recall. Omit to list all memories."
+          "description" => "The exact key of the memory to recall. Takes priority over search."
+        },
+        "search" => %{
+          "type" => "string",
+          "description" => "Search query to find memories by keyword. Supports Google-style syntax: quoted phrases (\"exact match\"), OR (term1 OR term2), exclusion (-term). Searches across keys, values, and memory types."
         }
       },
       "required" => []
@@ -41,20 +45,31 @@ defmodule OneAgent.Tools.RecallMemory do
   def execute(input, context) do
     agent = context[:agent]
     key = normalize_key(input["key"])
+    search = normalize_key(input["search"])
 
-    case key do
-      nil ->
+    cond do
+      # Priority 1: exact key lookup
+      key != nil ->
+        case OneAgent.Agents.get_memory(agent, key) do
+          nil -> {:ok, %{"found" => false, "key" => key}}
+          memory -> {:ok, %{"found" => true, "key" => key, "value" => memory.value, "type" => memory.memory_type}}
+        end
+
+      # Priority 2: full-text search
+      search != nil ->
+        results = OneAgent.Agents.search_memories(agent, search)
+        items = Enum.map(results, fn %{memory: m, rank: rank} ->
+          %{"key" => m.key, "type" => m.memory_type, "value" => m.value, "relevance" => Float.round(rank, 4)}
+        end)
+        {:ok, %{"memories" => items, "count" => length(items), "query" => search}}
+
+      # Priority 3: list all
+      true ->
         memories = OneAgent.Agents.list_memories(agent)
         items = Enum.map(memories, fn m ->
           %{"key" => m.key, "type" => m.memory_type, "value" => m.value}
         end)
         {:ok, %{"memories" => items, "count" => length(items)}}
-
-      key ->
-        case OneAgent.Agents.get_memory(agent, key) do
-          nil -> {:ok, %{"found" => false, "key" => key}}
-          memory -> {:ok, %{"found" => true, "key" => key, "value" => memory.value, "type" => memory.memory_type}}
-        end
     end
   end
 

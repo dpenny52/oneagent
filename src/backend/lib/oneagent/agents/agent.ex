@@ -22,6 +22,7 @@ defmodule OneAgent.Agents.Agent do
     has_many :memories, OneAgent.Agents.AgentMemory
     has_many :messages, OneAgent.Agents.AgentMessage
     has_many :schedules, OneAgent.Agents.AgentSchedule
+    has_many :goals, OneAgent.Agents.AgentGoal
 
     timestamps(type: :utc_datetime)
   end
