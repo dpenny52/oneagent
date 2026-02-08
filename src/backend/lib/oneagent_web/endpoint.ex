@@ -1,20 +1,6 @@
 defmodule OneAgentWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :oneagent
 
-  # The session will be stored in the cookie and signed,
-  # this means its contents can be read but not tampered with.
-  # Set :encryption_salt if you would also like to encrypt it.
-  @session_options [
-    store: :cookie,
-    key: "_oneagent_key",
-    signing_salt: "089dWjLW",
-    same_site: "Lax"
-  ]
-
-  # socket "/live", Phoenix.LiveView.Socket,
-  #   websocket: [connect_info: [session: @session_options]],
-  #   longpoll: [connect_info: [session: @session_options]]
-
   # Serve at "/" the static files from "priv/static" directory.
   #
   # When code reloading is disabled (e.g., in production),
@@ -53,7 +39,6 @@ defmodule OneAgentWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
-  plug Plug.Session, @session_options
   plug OneAgentWeb.Router
 
   def cors_origins(_conn, origin) do
