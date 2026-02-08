@@ -17,6 +17,24 @@ defmodule OneAgentWeb.Router do
     plug OneAgentWeb.Plugs.RateLimit, max_requests: 60, interval_ms: 60_000
   end
 
+  # Per-user rate limit on authenticated API routes (60 req/min)
+  pipeline :api_rate_limited do
+    plug OneAgentWeb.Plugs.RateLimit,
+      max_requests: 60,
+      interval_ms: 60_000,
+      by: :user,
+      bucket_prefix: "api"
+  end
+
+  # Stricter per-user rate limit on agent invoke (10 req/min)
+  pipeline :invoke_rate_limited do
+    plug OneAgentWeb.Plugs.RateLimit,
+      max_requests: 10,
+      interval_ms: 60_000,
+      by: :user,
+      bucket_prefix: "invoke"
+  end
+
   # Public auth routes (no auth required, rate limited)
   scope "/api/auth", OneAgentWeb do
     pipe_through [:api, :rate_limited]
@@ -55,12 +73,11 @@ defmodule OneAgentWeb.Router do
     get "/gmail", GmailAuthController, :authorize
   end
 
-  # Authenticated API routes
+  # Authenticated API routes (rate limited per user)
   scope "/api", OneAgentWeb do
-    pipe_through [:api, :require_authenticated_user]
+    pipe_through [:api, :require_authenticated_user, :api_rate_limited]
 
     resources "/agents", AgentController, except: [:new, :edit] do
-      post "/invoke", AgentController, :invoke
       get "/buckets", AgentController, :list_buckets
       put "/buckets", AgentController, :update_buckets
       get "/runs", AgentController, :list_runs
@@ -78,6 +95,13 @@ defmodule OneAgentWeb.Router do
     resources "/credentials", CredentialController, except: [:new, :edit]
     resources "/llm-configs", LlmConfigController, except: [:new, :edit]
     resources "/whatsapp-channels", WhatsAppChannelController, except: [:new, :edit]
+  end
+
+  # Agent invoke — stricter per-user rate limit (10 req/min)
+  scope "/api", OneAgentWeb do
+    pipe_through [:api, :require_authenticated_user, :invoke_rate_limited]
+
+    post "/agents/:agent_id/invoke", AgentController, :invoke
   end
 
   # WhatsApp webhook (unauthenticated, rate limited)
