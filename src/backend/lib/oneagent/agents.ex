@@ -503,9 +503,25 @@ defmodule OneAgent.Agents do
   end
 
   def get_goal_step(%AgentGoal{} = goal, step_id) do
-    case Repo.get_by(AgentGoalStep, id: step_id, goal_id: goal.id) do
-      nil -> {:error, :not_found}
-      step -> {:ok, step}
+    case Ecto.UUID.cast(step_id) do
+      {:ok, _uuid} ->
+        case Repo.get_by(AgentGoalStep, id: step_id, goal_id: goal.id) do
+          nil -> {:error, :not_found}
+          step -> {:ok, step}
+        end
+
+      :error ->
+        # LLMs sometimes pass position number instead of UUID — fall back to position lookup
+        case Integer.parse(to_string(step_id)) do
+          {position, ""} ->
+            case Repo.get_by(AgentGoalStep, position: position, goal_id: goal.id) do
+              nil -> {:error, :not_found}
+              step -> {:ok, step}
+            end
+
+          _ ->
+            {:error, :not_found}
+        end
     end
   end
 
