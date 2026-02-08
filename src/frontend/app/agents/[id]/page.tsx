@@ -473,7 +473,7 @@ function AgentDetailContent() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                   <div>
                     <label style={labelStyle()}>Provider</label>
-                    <select value={settingsForm.model_provider || "anthropic"} onChange={(e) => { const prov = e.target.value; setSettingsForm((p) => ({ ...p, model_provider: prov, model_id: MODEL_OPTIONS[prov]?.[0]?.id || p.model_id })); }} style={selectStyle}>
+                    <select value={settingsForm.model_provider || "anthropic"} onChange={(e) => { const prov = e.target.value; setSettingsForm((p) => ({ ...p, model_provider: prov, model_id: MODEL_OPTIONS[prov]?.[0]?.id || p.model_id, llm_config_id: null })); }} style={selectStyle}>
                       <option value="anthropic">Anthropic</option>
                       <option value="openai">OpenAI</option>
                     </select>
@@ -493,7 +493,7 @@ function AgentDetailContent() {
                   <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
                     <select value={settingsForm.llm_config_id || ""} onChange={(e) => setSettingsForm((p) => ({ ...p, llm_config_id: e.target.value || null }))} style={{ ...selectStyle, flex: 1 }}>
                       <option value="">None</option>
-                      {configs.map((c) => <option key={c.id} value={c.id}>{c.label} ({c.provider}){c.is_default ? " \u2605" : ""}</option>)}
+                      {configs.filter((c) => c.provider === (settingsForm.model_provider || "anthropic")).map((c) => <option key={c.id} value={c.id}>{c.label}{c.is_default ? " \u2605" : ""}</option>)}
                     </select>
                     <a href="/keys" style={{ padding: "0 1rem", borderRadius: 12, border: `1px solid ${C.glow}30`, background: "rgba(0,212,170,0.05)", color: C.glow, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.82rem", fontWeight: 500, textDecoration: "none", display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>+ Add Key</a>
                   </div>

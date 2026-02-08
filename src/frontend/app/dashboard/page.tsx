@@ -271,7 +271,7 @@ function DashboardContent() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                   <div>
                     <label style={labelStyle()}>Provider *</label>
-                    <select value={modelProvider} onChange={(e) => { const prov = e.target.value; setModelProvider(prov); setModelId(MODEL_OPTIONS[prov]?.[0]?.id || ""); }} style={selectStyle}>
+                    <select value={modelProvider} onChange={(e) => { const prov = e.target.value; setModelProvider(prov); setModelId(MODEL_OPTIONS[prov]?.[0]?.id || ""); setLlmConfigId(""); }} style={selectStyle}>
                       <option value="anthropic">Anthropic</option>
                       <option value="openai">OpenAI</option>
                     </select>
@@ -288,8 +288,8 @@ function DashboardContent() {
                   <label style={labelStyle()}>LLM Config</label>
                   <select value={llmConfigId} onChange={(e) => setLlmConfigId(e.target.value)} style={selectStyle}>
                     <option value="">None (configure in Keys)</option>
-                    {configs.map((c) => (
-                      <option key={c.id} value={c.id}>{c.label} ({c.provider}){c.is_default ? " \u2605" : ""}</option>
+                    {configs.filter((c) => c.provider === modelProvider).map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}{c.is_default ? " \u2605" : ""}</option>
                     ))}
                   </select>
                 </div>

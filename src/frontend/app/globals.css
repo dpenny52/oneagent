@@ -12,3 +12,8 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+select, option {
+  background: #0d1a20;
+  color: #e0e0e0;
+}
