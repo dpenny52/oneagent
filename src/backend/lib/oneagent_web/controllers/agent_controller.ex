@@ -198,11 +198,17 @@ defmodule OneAgentWeb.AgentController do
     end
   end
 
+  @allowed_bucket_keys %{
+    "bucket" => :bucket,
+    "scope_config" => :scope_config,
+    "credential_id" => :credential_id
+  }
+
   defp atomize_bucket_configs(configs) when is_list(configs) do
     Enum.map(configs, fn config ->
       config
-      |> Map.take(["bucket", "scope_config", "credential_id"])
-      |> Map.new(fn {k, v} -> {String.to_existing_atom(k), v} end)
+      |> Map.take(Map.keys(@allowed_bucket_keys))
+      |> Map.new(fn {k, v} -> {Map.fetch!(@allowed_bucket_keys, k), v} end)
     end)
   end
 

@@ -130,6 +130,18 @@ defmodule OneAgentWeb.AgentControllerTest do
       assert "data_write" in bucket_names
     end
 
+    test "ignores unknown keys in bucket configs without crashing", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+
+      conn = put(conn, "/api/agents/#{agent.id}/buckets", %{
+        "buckets" => [%{"bucket" => "email", "unknown_key" => "evil", "__proto__" => "bad"}]
+      })
+
+      assert %{"data" => buckets} = json_response(conn, 200)
+      assert length(buckets) == 1
+    end
+
     test "rejects another user's credential_id", %{conn: conn, user: user} do
       scope = OneAgent.Accounts.Scope.for_user(user)
       agent = agent_fixture(scope)
