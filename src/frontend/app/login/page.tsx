@@ -1,175 +1,19 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Instrument_Serif, DM_Sans, Lora } from "next/font/google";
 import { useEffect, useState, FormEvent } from "react";
 import { useAuth } from "../lib/auth";
-
-/* ------------------------------------------------------------------ */
-/*  Fonts                                                              */
-/* ------------------------------------------------------------------ */
-const instrumentSerif = Instrument_Serif({
-  subsets: ["latin"],
-  weight: "400",
-  style: ["normal", "italic"],
-  variable: "--font-instrument",
-});
-
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600"],
-  variable: "--font-dm",
-});
-
-const lora = Lora({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  style: ["normal", "italic"],
-  variable: "--font-lora",
-});
-
-/* ------------------------------------------------------------------ */
-/*  Palette                                                            */
-/* ------------------------------------------------------------------ */
-const C = {
-  bg: "#060E12",
-  glow: "#00D4AA",
-  glowDim: "rgba(0,212,170,0.12)",
-  forest: "#1B4D3E",
-  forestDim: "rgba(27,77,62,0.15)",
-  lavender: "#9B72CF",
-  lavenderDim: "rgba(155,114,207,0.10)",
-  phosphor: "#7FE5C0",
-  text: "#D8EDE6",
-  muted: "rgba(216,237,230,0.40)",
-  faint: "rgba(216,237,230,0.18)",
-  danger: "#FF6B6B",
-};
+import { C, inputStyle } from "../lib/theme";
+import type { Spore } from "../lib/types";
+import { fontVars } from "../components/fonts";
+import { useKeyframes } from "../components/useKeyframes";
+import { Orb } from "../components/Orb";
+import { SporeField } from "../components/SporeField";
+import { MeshGradient } from "../components/MeshGradient";
+import { generateSpores } from "../components/generateSpores";
+import { applyFocus, removeFocus } from "../components/FocusHandlers";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-
-/* ------------------------------------------------------------------ */
-/*  Keyframe injection                                                 */
-/* ------------------------------------------------------------------ */
-function useKeyframes() {
-  useEffect(() => {
-    const id = "login-page-kf";
-    if (document.getElementById(id)) return;
-    const s = document.createElement("style");
-    s.id = id;
-    s.textContent = `
-      @keyframes drift1 {
-        0%, 100% { transform: translate(0, 0) scale(1); }
-        25% { transform: translate(50px, -35px) scale(1.08); }
-        50% { transform: translate(-25px, 45px) scale(0.95); }
-        75% { transform: translate(35px, 20px) scale(1.04); }
-      }
-      @keyframes drift2 {
-        0%, 100% { transform: translate(0, 0) scale(1); }
-        25% { transform: translate(-40px, 40px) scale(1.06); }
-        50% { transform: translate(30px, -25px) scale(0.93); }
-        75% { transform: translate(-15px, -50px) scale(1.02); }
-      }
-      @keyframes drift3 {
-        0%, 100% { transform: translate(0, 0) scale(1); }
-        33% { transform: translate(55px, 15px) scale(1.1); }
-        66% { transform: translate(-35px, -40px) scale(0.92); }
-      }
-      @keyframes sporeFloat {
-        0%, 100% { transform: translateY(0) translateX(0); opacity: 0.15; }
-        25% { transform: translateY(-20px) translateX(8px); opacity: 0.7; }
-        50% { transform: translateY(-35px) translateX(-5px); opacity: 0.4; }
-        75% { transform: translateY(-15px) translateX(12px); opacity: 0.8; }
-      }
-      @keyframes sporePulse {
-        0%, 100% { box-shadow: 0 0 3px 1px rgba(0,212,170,0.2); }
-        50% { box-shadow: 0 0 10px 3px rgba(0,212,170,0.5); }
-      }
-      @keyframes meshShift {
-        0% { background-position: 0% 50%, 100% 50%, 50% 0%; }
-        25% { background-position: 100% 0%, 0% 100%, 50% 50%; }
-        50% { background-position: 50% 100%, 50% 0%, 0% 50%; }
-        75% { background-position: 0% 0%, 100% 100%, 100% 50%; }
-        100% { background-position: 0% 50%, 100% 50%, 50% 0%; }
-      }
-      @keyframes pulseGlow {
-        0%, 100% { box-shadow: 0 0 20px rgba(0,212,170,0.08); }
-        50% { box-shadow: 0 0 40px rgba(0,212,170,0.15); }
-      }
-    `;
-    document.head.appendChild(s);
-    return () => {
-      const el = document.getElementById(id);
-      if (el) el.remove();
-    };
-  }, []);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Spore particles                                                    */
-/* ------------------------------------------------------------------ */
-interface Spore {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  duration: number;
-  delay: number;
-  color: string;
-}
-
-function generateSpores(count: number): Spore[] {
-  const colors = [C.glow, C.phosphor, C.lavender, C.glow, C.phosphor];
-  return Array.from({ length: count }, (_, i) => ({
-    id: i,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    size: Math.random() * 3 + 1,
-    duration: Math.random() * 7 + 4,
-    delay: Math.random() * 6,
-    color: colors[i % colors.length],
-  }));
-}
-
-/* ------------------------------------------------------------------ */
-/*  Ambient orb                                                        */
-/* ------------------------------------------------------------------ */
-function Orb({
-  size,
-  color,
-  top,
-  left,
-  animation,
-  duration,
-  opacity = 0.2,
-}: {
-  size: number;
-  color: string;
-  top: string;
-  left: string;
-  animation: string;
-  duration: string;
-  opacity?: number;
-}) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        background: `radial-gradient(circle at 30% 30%, ${color}, transparent 70%)`,
-        filter: `blur(${size * 0.4}px)`,
-        opacity,
-        top,
-        left,
-        animation: `${animation} ${duration} ease-in-out infinite`,
-        pointerEvents: "none",
-        willChange: "transform",
-      }}
-    />
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /*  Login mode type                                                    */
@@ -180,7 +24,7 @@ type LoginMode = "password" | "magic-link";
 /*  Main login page                                                    */
 /* ================================================================== */
 export default function LoginPage() {
-  useKeyframes();
+  useKeyframes("login-page-kf");
   const { login: authLogin } = useAuth();
   const [spores, setSpores] = useState<Spore[]>([]);
   const [mode, setMode] = useState<LoginMode>("password");
@@ -301,23 +145,6 @@ export default function LoginPage() {
     }
   }
 
-  /* ---- Shared input style ---- */
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "0.85rem 1rem",
-    borderRadius: 12,
-    border: `1px solid ${C.faint}`,
-    background: "rgba(255,255,255,0.03)",
-    color: C.text,
-    fontFamily: "var(--font-dm), sans-serif",
-    fontSize: "0.95rem",
-    fontWeight: 400,
-    outline: "none",
-    transition: "border-color 0.2s, box-shadow 0.2s",
-  };
-
-  const inputFocusStyle = `border-color: ${C.glow}55; box-shadow: 0 0 0 3px ${C.glow}12;`;
-
   /* ---- Mode tab style ---- */
   function tabStyle(active: boolean): React.CSSProperties {
     return {
@@ -340,7 +167,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className={`${instrumentSerif.variable} ${dmSans.variable} ${lora.variable}`}
+      className={fontVars}
       style={{
         minHeight: "100vh",
         background: C.bg,
@@ -361,49 +188,10 @@ export default function LoginPage() {
       <Orb size={350} color={C.forest} top="70%" left="65%" animation="drift1" duration="22s" opacity={0.12} />
 
       {/* ========== Floating spores ========== */}
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          zIndex: 1,
-          overflow: "hidden",
-        }}
-      >
-        {spores.map((sp) => (
-          <div
-            key={sp.id}
-            style={{
-              position: "absolute",
-              left: `${sp.x}%`,
-              top: `${sp.y}%`,
-              width: sp.size,
-              height: sp.size,
-              borderRadius: "50%",
-              backgroundColor: sp.color,
-              animation: `sporeFloat ${sp.duration}s ease-in-out ${sp.delay}s infinite, sporePulse ${sp.duration * 0.6}s ease-in-out ${sp.delay}s infinite`,
-            }}
-          />
-        ))}
-      </div>
+      <SporeField spores={spores} />
 
       {/* ========== Mesh gradient ========== */}
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 0,
-          opacity: 0.3,
-          background: `
-            radial-gradient(ellipse 55% 45% at 20% 50%, ${C.glowDim} 0%, transparent 70%),
-            radial-gradient(ellipse 45% 55% at 80% 30%, ${C.lavenderDim} 0%, transparent 70%),
-            radial-gradient(ellipse 35% 35% at 50% 80%, ${C.forestDim} 0%, transparent 70%)
-          `,
-          backgroundSize: "200% 200%, 200% 200%, 200% 200%",
-          animation: "meshShift 22s ease-in-out infinite",
-          pointerEvents: "none",
-        }}
-      />
+      <MeshGradient />
 
       {/* ========== Login card ========== */}
       <motion.div
@@ -637,7 +425,7 @@ export default function LoginPage() {
               </p>
               <div>
                 <label style={{ display: "block", fontFamily: "var(--font-dm), sans-serif", fontSize: "0.8rem", fontWeight: 500, color: C.text, marginBottom: "0.4rem", letterSpacing: "0.03em" }}>Email</label>
-                <input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@example.com" style={inputStyle} onFocus={(e) => e.currentTarget.setAttribute("style", `${Object.entries(inputStyle).map(([k, v]) => `${k.replace(/([A-Z])/g, "-$1").toLowerCase()}:${v}`).join(";")}; ${inputFocusStyle}`)} onBlur={(e) => { Object.assign(e.currentTarget.style, inputStyle); }} />
+                <input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="you@example.com" style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
               </div>
               <motion.button type="submit" disabled={loading} whileHover={loading ? {} : { scale: 1.02, boxShadow: `0 0 30px ${C.glow}33` }} whileTap={loading ? {} : { scale: 0.98 }} style={{ width: "100%", padding: "0.9rem", borderRadius: 12, border: "none", background: loading ? C.forest : `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: loading ? C.muted : C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.95rem", fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", letterSpacing: "0.01em", boxShadow: `0 0 20px ${C.glow}15`, marginTop: "0.5rem", transition: "background 0.3s" }}>
                 {loading ? "Sending..." : "Send Reset Link"}
@@ -697,11 +485,9 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    style={inputStyle}
-                    onFocus={(e) => e.currentTarget.setAttribute("style", `${Object.entries(inputStyle).map(([k, v]) => `${k.replace(/([A-Z])/g, "-$1").toLowerCase()}:${v}`).join(";")}; ${inputFocusStyle}`)}
-                    onBlur={(e) => {
-                      Object.assign(e.currentTarget.style, inputStyle);
-                    }}
+                    style={inputStyle()}
+                    onFocus={applyFocus}
+                    onBlur={removeFocus}
                   />
                 </div>
 
@@ -726,11 +512,9 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
-                    style={inputStyle}
-                    onFocus={(e) => e.currentTarget.setAttribute("style", `${Object.entries(inputStyle).map(([k, v]) => `${k.replace(/([A-Z])/g, "-$1").toLowerCase()}:${v}`).join(";")}; ${inputFocusStyle}`)}
-                    onBlur={(e) => {
-                      Object.assign(e.currentTarget.style, inputStyle);
-                    }}
+                    style={inputStyle()}
+                    onFocus={applyFocus}
+                    onBlur={removeFocus}
                   />
                 </div>
 
@@ -828,11 +612,9 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    style={inputStyle}
-                    onFocus={(e) => e.currentTarget.setAttribute("style", `${Object.entries(inputStyle).map(([k, v]) => `${k.replace(/([A-Z])/g, "-$1").toLowerCase()}:${v}`).join(";")}; ${inputFocusStyle}`)}
-                    onBlur={(e) => {
-                      Object.assign(e.currentTarget.style, inputStyle);
-                    }}
+                    style={inputStyle()}
+                    onFocus={applyFocus}
+                    onBlur={removeFocus}
                   />
                 </div>
 

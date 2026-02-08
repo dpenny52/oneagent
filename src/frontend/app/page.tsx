@@ -1,443 +1,38 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Instrument_Serif, DM_Sans, Lora } from "next/font/google";
 import { useEffect, useState } from "react";
 import { useAuth } from "./lib/auth";
-
-/* ------------------------------------------------------------------ */
-/*  Fonts                                                              */
-/* ------------------------------------------------------------------ */
-const instrumentSerif = Instrument_Serif({
-  subsets: ["latin"],
-  weight: "400",
-  style: ["normal", "italic"],
-  variable: "--font-instrument",
-});
-
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600"],
-  variable: "--font-dm",
-});
-
-const lora = Lora({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  style: ["normal", "italic"],
-  variable: "--font-lora",
-});
-
-/* ------------------------------------------------------------------ */
-/*  Palette                                                            */
-/* ------------------------------------------------------------------ */
-const C = {
-  bg: "#060E12",
-  glow: "#00D4AA",
-  glowDim: "rgba(0,212,170,0.12)",
-  forest: "#1B4D3E",
-  forestDim: "rgba(27,77,62,0.15)",
-  lavender: "#9B72CF",
-  lavenderDim: "rgba(155,114,207,0.10)",
-  pink: "#FF3D8E",
-  pinkDim: "rgba(255,61,142,0.08)",
-  phosphor: "#7FE5C0",
-  text: "#D8EDE6",
-  muted: "rgba(216,237,230,0.40)",
-  faint: "rgba(216,237,230,0.18)",
-};
-
-/* ------------------------------------------------------------------ */
-/*  Keyframe injection                                                 */
-/* ------------------------------------------------------------------ */
-function useKeyframes() {
-  useEffect(() => {
-    const id = "bioluminescent-garden-kf";
-    if (document.getElementById(id)) return;
-    const s = document.createElement("style");
-    s.id = id;
-    s.textContent = `
-      @keyframes drift1 {
-        0%, 100% { transform: translate(0, 0) scale(1); }
-        25% { transform: translate(50px, -35px) scale(1.08); }
-        50% { transform: translate(-25px, 45px) scale(0.95); }
-        75% { transform: translate(35px, 20px) scale(1.04); }
-      }
-      @keyframes drift2 {
-        0%, 100% { transform: translate(0, 0) scale(1); }
-        25% { transform: translate(-40px, 40px) scale(1.06); }
-        50% { transform: translate(30px, -25px) scale(0.93); }
-        75% { transform: translate(-15px, -50px) scale(1.02); }
-      }
-      @keyframes drift3 {
-        0%, 100% { transform: translate(0, 0) scale(1); }
-        33% { transform: translate(55px, 15px) scale(1.1); }
-        66% { transform: translate(-35px, -40px) scale(0.92); }
-      }
-      @keyframes sporeFloat {
-        0%, 100% { transform: translateY(0) translateX(0); opacity: 0.15; }
-        25% { transform: translateY(-20px) translateX(8px); opacity: 0.7; }
-        50% { transform: translateY(-35px) translateX(-5px); opacity: 0.4; }
-        75% { transform: translateY(-15px) translateX(12px); opacity: 0.8; }
-      }
-      @keyframes sporePulse {
-        0%, 100% { box-shadow: 0 0 3px 1px rgba(0,212,170,0.2); }
-        50% { box-shadow: 0 0 10px 3px rgba(0,212,170,0.5); }
-      }
-      @keyframes meshShift {
-        0% { background-position: 0% 50%, 100% 50%, 50% 0%; }
-        25% { background-position: 100% 0%, 0% 100%, 50% 50%; }
-        50% { background-position: 50% 100%, 50% 0%, 0% 50%; }
-        75% { background-position: 0% 0%, 100% 100%, 100% 50%; }
-        100% { background-position: 0% 50%, 100% 50%, 50% 0%; }
-      }
-      @keyframes scrollLine {
-        0%, 100% { transform: translateY(0); opacity: 0.6; }
-        50% { transform: translateY(8px); opacity: 0.2; }
-      }
-      @keyframes vineGrow {
-        from { stroke-dashoffset: 800; }
-        to { stroke-dashoffset: 0; }
-      }
-      @keyframes nodeGlow {
-        0%, 100% { opacity: 0.5; filter: drop-shadow(0 0 4px rgba(0,212,170,0.3)); }
-        50% { opacity: 1; filter: drop-shadow(0 0 10px rgba(0,212,170,0.6)); }
-      }
-    `;
-    document.head.appendChild(s);
-    return () => {
-      const el = document.getElementById(id);
-      if (el) el.remove();
-    };
-  }, []);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Spore particle data                                                */
-/* ------------------------------------------------------------------ */
-interface Spore {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  duration: number;
-  delay: number;
-  color: string;
-}
-
-function generateSpores(count: number): Spore[] {
-  const colors = [C.glow, C.phosphor, C.lavender, C.glow, C.phosphor];
-  return Array.from({ length: count }, (_, i) => ({
-    id: i,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    size: Math.random() * 3 + 1,
-    duration: Math.random() * 7 + 4,
-    delay: Math.random() * 6,
-    color: colors[i % colors.length],
-  }));
-}
-
-/* ------------------------------------------------------------------ */
-/*  Ambient orb                                                        */
-/* ------------------------------------------------------------------ */
-function Orb({
-  size,
-  color,
-  top,
-  left,
-  animation,
-  duration,
-  opacity = 0.2,
-}: {
-  size: number;
-  color: string;
-  top: string;
-  left: string;
-  animation: string;
-  duration: string;
-  opacity?: number;
-}) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        background: `radial-gradient(circle at 30% 30%, ${color}, transparent 70%)`,
-        filter: `blur(${size * 0.4}px)`,
-        opacity,
-        top,
-        left,
-        animation: `${animation} ${duration} ease-in-out infinite`,
-        pointerEvents: "none",
-        willChange: "transform",
-      }}
-    />
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Bioluminescent vine SVG                                            */
-/* ------------------------------------------------------------------ */
-function GlowingVine({
-  d,
-  color = C.forest,
-  glowColor = C.glow,
-  width = "100%",
-  height = "100%",
-  viewBox = "0 0 800 600",
-  opacity = 0.3,
-}: {
-  d: string;
-  color?: string;
-  glowColor?: string;
-  width?: string;
-  height?: string;
-  viewBox?: string;
-  opacity?: number;
-}) {
-  return (
-    <svg
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width,
-        height,
-        pointerEvents: "none",
-        overflow: "visible",
-      }}
-      viewBox={viewBox}
-      fill="none"
-      preserveAspectRatio="none"
-    >
-      <path
-        d={d}
-        stroke={glowColor}
-        strokeWidth="2"
-        strokeOpacity={0.08}
-        fill="none"
-        style={{ filter: `blur(8px)` }}
-      />
-      <path
-        d={d}
-        stroke={color}
-        strokeWidth="1.5"
-        strokeOpacity={opacity}
-        fill="none"
-      />
-    </svg>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Leaf ornament divider                                              */
-/* ------------------------------------------------------------------ */
-function LeafDivider({ color = C.glow }: { color?: string }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, scaleX: 0 }}
-      whileInView={{ opacity: 1, scaleX: 1 }}
-      viewport={{ once: true, amount: 0.5 }}
-      transition={{ duration: 1, ease: "easeOut" }}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 16,
-        padding: "40px 0",
-        transformOrigin: "center",
-      }}
-    >
-      <div
-        style={{
-          flex: 1,
-          maxWidth: 160,
-          height: 1,
-          background: `linear-gradient(90deg, transparent, ${color}44)`,
-        }}
-      />
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M12 2C10 2 8 5 8 9C8 13 10 18 12 21C14 18 16 13 16 9C16 5 14 2 12 2Z"
-          fill={color}
-          fillOpacity={0.3}
-          stroke={color}
-          strokeWidth="0.8"
-          strokeOpacity={0.5}
-        />
-      </svg>
-      <div
-        style={{
-          flex: 1,
-          maxWidth: 160,
-          height: 1,
-          background: `linear-gradient(90deg, ${color}44, transparent)`,
-        }}
-      />
-    </motion.div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Feature card                                                       */
-/* ------------------------------------------------------------------ */
-function FeatureCard({
-  icon,
-  title,
-  description,
-  glowColor,
-  delay,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  glowColor: string;
-  delay: number;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 40 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.3 }}
-      transition={{ duration: 0.7, delay, ease: "easeOut" }}
-      whileHover={{
-        y: -4,
-        boxShadow: `0 8px 40px ${glowColor}15, 0 0 60px ${glowColor}08`,
-      }}
-      style={{
-        flex: "1 1 300px",
-        maxWidth: 380,
-        padding: "2.5rem 2rem",
-        borderRadius: 24,
-        background: "rgba(255,255,255,0.02)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        border: `1px solid ${glowColor}18`,
-        boxShadow: `0 0 30px ${glowColor}05, inset 0 0 30px ${glowColor}02`,
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      {/* Glow accent */}
-      <div
-        style={{
-          position: "absolute",
-          top: -30,
-          left: -30,
-          width: 100,
-          height: 100,
-          borderRadius: "50%",
-          background: `radial-gradient(circle, ${glowColor}12, transparent 70%)`,
-          filter: "blur(25px)",
-          pointerEvents: "none",
-        }}
-      />
-      <div style={{ marginBottom: "1rem", position: "relative" }}>{icon}</div>
-      <h3
-        style={{
-          fontFamily: "var(--font-instrument), serif",
-          fontSize: "1.3rem",
-          fontWeight: 400,
-          color: "#fff",
-          marginBottom: "0.75rem",
-          letterSpacing: "-0.01em",
-        }}
-      >
-        {title}
-      </h3>
-      <p
-        style={{
-          fontFamily: "var(--font-dm), sans-serif",
-          fontSize: "0.92rem",
-          lineHeight: 1.7,
-          color: C.muted,
-          fontWeight: 300,
-        }}
-      >
-        {description}
-      </p>
-    </motion.div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Step card for "How it works"                                       */
-/* ------------------------------------------------------------------ */
-function StepCard({
-  number,
-  title,
-  description,
-  delay,
-}: {
-  number: string;
-  title: string;
-  description: string;
-  delay: number;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.3 }}
-      transition={{ duration: 0.7, delay, ease: "easeOut" }}
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: "1.5rem",
-        padding: "2rem 0",
-        borderBottom: `1px solid ${C.forestDim}`,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "var(--font-instrument), serif",
-          fontSize: "2.5rem",
-          color: C.glow,
-          opacity: 0.5,
-          lineHeight: 1,
-          minWidth: 60,
-          textAlign: "center",
-          textShadow: `0 0 20px ${C.glow}33`,
-        }}
-      >
-        {number}
-      </div>
-      <div>
-        <h3
-          style={{
-            fontFamily: "var(--font-instrument), serif",
-            fontSize: "1.25rem",
-            fontWeight: 400,
-            color: "#fff",
-            marginBottom: "0.5rem",
-          }}
-        >
-          {title}
-        </h3>
-        <p
-          style={{
-            fontFamily: "var(--font-dm), sans-serif",
-            fontSize: "0.95rem",
-            lineHeight: 1.7,
-            color: C.muted,
-            fontWeight: 300,
-          }}
-        >
-          {description}
-        </p>
-      </div>
-    </motion.div>
-  );
-}
+import { C } from "./lib/theme";
+import type { Spore } from "./lib/types";
+import { fontVars } from "./components/fonts";
+import { useKeyframes } from "./components/useKeyframes";
+import { Orb } from "./components/Orb";
+import { SporeField } from "./components/SporeField";
+import { MeshGradient } from "./components/MeshGradient";
+import { generateSpores } from "./components/generateSpores";
+import { GlowingVine } from "./components/landing/GlowingVine";
+import { LeafDivider } from "./components/landing/LeafDivider";
+import { DeployButton } from "./components/landing/DeployButton";
+import { FeatureCard } from "./components/landing/FeatureCard";
+import { StepCard } from "./components/landing/StepCard";
 
 /* ================================================================== */
 /*  Main page                                                          */
 /* ================================================================== */
 export default function BioluminescentGardenPage() {
-  useKeyframes();
+  useKeyframes("landing-page-kf", `@keyframes scrollLine {
+    0%, 100% { transform: translateY(0); opacity: 0.6; }
+    50% { transform: translateY(8px); opacity: 0.2; }
+  }
+  @keyframes vineGrow {
+    from { stroke-dashoffset: 800; }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes nodeGlow {
+    0%, 100% { opacity: 0.5; filter: drop-shadow(0 0 4px rgba(0,212,170,0.3)); }
+    50% { opacity: 1; filter: drop-shadow(0 0 10px rgba(0,212,170,0.6)); }
+  }`);
   const { user, loading: authLoading, logout } = useAuth();
   const [spores, setSpores] = useState<Spore[]>([]);
 
@@ -447,7 +42,7 @@ export default function BioluminescentGardenPage() {
 
   return (
     <div
-      className={`${instrumentSerif.variable} ${dmSans.variable} ${lora.variable}`}
+      className={fontVars}
       style={{
         minHeight: "100vh",
         background: C.bg,
@@ -583,31 +178,7 @@ export default function BioluminescentGardenPage() {
       <Orb size={280} color={C.lavender} top="85%" left="15%" animation="drift3" duration="25s" opacity={0.1} />
 
       {/* ========== Floating spores ========== */}
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          zIndex: 1,
-          overflow: "hidden",
-        }}
-      >
-        {spores.map((sp) => (
-          <div
-            key={sp.id}
-            style={{
-              position: "absolute",
-              left: `${sp.x}%`,
-              top: `${sp.y}%`,
-              width: sp.size,
-              height: sp.size,
-              borderRadius: "50%",
-              backgroundColor: sp.color,
-              animation: `sporeFloat ${sp.duration}s ease-in-out ${sp.delay}s infinite, sporePulse ${sp.duration * 0.6}s ease-in-out ${sp.delay}s infinite`,
-            }}
-          />
-        ))}
-      </div>
+      <SporeField spores={spores} />
 
       {/* ========== Background vines ========== */}
       <GlowingVine
@@ -621,22 +192,7 @@ export default function BioluminescentGardenPage() {
       />
 
       {/* ========== Mesh gradient ========== */}
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 0,
-          opacity: 0.35,
-          background: `
-            radial-gradient(ellipse 55% 45% at 20% 50%, ${C.glowDim} 0%, transparent 70%),
-            radial-gradient(ellipse 45% 55% at 80% 30%, ${C.lavenderDim} 0%, transparent 70%),
-            radial-gradient(ellipse 35% 35% at 50% 80%, ${C.forestDim} 0%, transparent 70%)
-          `,
-          backgroundSize: "200% 200%, 200% 200%, 200% 200%",
-          animation: "meshShift 22s ease-in-out infinite",
-          pointerEvents: "none",
-        }}
-      />
+      <MeshGradient opacity={0.35} />
 
       {/* ========== HERO ========== */}
       <section
@@ -744,39 +300,13 @@ export default function BioluminescentGardenPage() {
         </motion.p>
 
         {/* CTA */}
-        <motion.a
-          href={user ? "/dashboard" : "/login"}
+        <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.7, delay: 1.1, ease: "easeOut" }}
-          whileHover={{
-            scale: 1.04,
-            boxShadow: `0 0 36px ${C.glow}44, 0 0 72px ${C.glow}18`,
-          }}
-          whileTap={{ scale: 0.97 }}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.6rem",
-            padding: "1rem 2.2rem",
-            borderRadius: 14,
-            background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`,
-            color: C.bg,
-            fontFamily: "var(--font-dm)",
-            fontSize: "1rem",
-            fontWeight: 600,
-            textDecoration: "none",
-            cursor: "pointer",
-            border: "none",
-            letterSpacing: "0.01em",
-            boxShadow: `0 0 24px ${C.glow}22`,
-          }}
         >
-          Deploy Your Agent
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-        </motion.a>
+          <DeployButton user={user} />
+        </motion.div>
 
         {/* Scroll indicator */}
         <motion.div
@@ -1201,36 +731,7 @@ export default function BioluminescentGardenPage() {
             Deploy your own persistent AI agent in under a minute.
           </p>
 
-          <motion.a
-            href="#"
-            whileHover={{
-              scale: 1.04,
-              boxShadow: `0 0 36px ${C.glow}44, 0 0 72px ${C.glow}18`,
-            }}
-            whileTap={{ scale: 0.97 }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.6rem",
-              padding: "1.1rem 2.4rem",
-              borderRadius: 14,
-              background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`,
-              color: C.bg,
-              fontFamily: "var(--font-dm)",
-              fontSize: "1.05rem",
-              fontWeight: 600,
-              textDecoration: "none",
-              cursor: "pointer",
-              border: "none",
-              letterSpacing: "0.01em",
-              boxShadow: `0 0 24px ${C.glow}22`,
-            }}
-          >
-            Deploy Your Agent
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-          </motion.a>
+          <DeployButton user={user} size="large" />
         </motion.div>
       </section>
 

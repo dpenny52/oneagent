@@ -70,19 +70,6 @@ export function labelStyle(): React.CSSProperties {
   };
 }
 
-/* ---- Apply focus effect on an input element ---- */
-export function applyInputFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  const base = inputStyle();
-  const cssStr = Object.entries(base)
-    .map(([k, v]) => `${k.replace(/([A-Z])/g, "-$1").toLowerCase()}:${v}`)
-    .join(";");
-  e.currentTarget.setAttribute("style", `${cssStr}; ${inputFocusCSS}`);
-}
-
-export function removeInputFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  Object.assign(e.currentTarget.style, inputStyle());
-}
-
 /* ---- Glass card style ---- */
 export function glassCard(): React.CSSProperties {
   return {

@@ -1,97 +1,24 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Instrument_Serif, DM_Sans, Lora } from "next/font/google";
 import { useEffect, useState, FormEvent } from "react";
-import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
 import { Protected } from "../lib/protected";
-import { C, inputStyle, inputFocusCSS, buttonStyle, labelStyle, glassCard } from "../lib/theme";
-
-const instrumentSerif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-instrument" });
-const dmSans = DM_Sans({ subsets: ["latin"], weight: ["300", "400", "500", "600"], variable: "--font-dm" });
-const lora = Lora({ subsets: ["latin"], weight: ["400", "500"], style: ["normal", "italic"], variable: "--font-lora" });
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-interface Agent {
-  id: string;
-  name: string;
-  description: string | null;
-  model_provider: string;
-  model_id: string;
-  llm_config_id: string | null;
-  has_llm_config: boolean;
-  inserted_at: string;
-}
-
-interface LlmConfig {
-  id: string;
-  provider: string;
-  label: string;
-  is_default: boolean;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Keyframes                                                          */
-/* ------------------------------------------------------------------ */
-function useKeyframes() {
-  useEffect(() => {
-    const id = "dashboard-kf";
-    if (document.getElementById(id)) return;
-    const s = document.createElement("style");
-    s.id = id;
-    s.textContent = `
-      @keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)} 25%{transform:translate(50px,-35px) scale(1.08)} 50%{transform:translate(-25px,45px) scale(0.95)} 75%{transform:translate(35px,20px) scale(1.04)} }
-      @keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)} 25%{transform:translate(-40px,40px) scale(1.06)} 50%{transform:translate(30px,-25px) scale(0.93)} 75%{transform:translate(-15px,-50px) scale(1.02)} }
-      @keyframes meshShift { 0%{background-position:0% 50%,100% 50%,50% 0%} 25%{background-position:100% 0%,0% 100%,50% 50%} 50%{background-position:50% 100%,50% 0%,0% 50%} 75%{background-position:0% 0%,100% 100%,100% 50%} 100%{background-position:0% 50%,100% 50%,50% 0%} }
-    `;
-    document.head.appendChild(s);
-    return () => { const el = document.getElementById(id); if (el) el.remove(); };
-  }, []);
-}
-
-function Orb({ size, color, top, left, animation, duration, opacity = 0.2 }: { size: number; color: string; top: string; left: string; animation: string; duration: string; opacity?: number }) {
-  return <div style={{ position: "absolute", width: size, height: size, borderRadius: "50%", background: `radial-gradient(circle at 30% 30%, ${color}, transparent 70%)`, filter: `blur(${size * 0.4}px)`, opacity, top, left, animation: `${animation} ${duration} ease-in-out infinite`, pointerEvents: "none", willChange: "transform" }} />;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Focus helpers                                                      */
-/* ------------------------------------------------------------------ */
-function applyFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  const base = inputStyle();
-  const cssStr = Object.entries(base).map(([k, v]) => `${k.replace(/([A-Z])/g, "-$1").toLowerCase()}:${v}`).join(";");
-  e.currentTarget.setAttribute("style", `${cssStr}; ${inputFocusCSS}`);
-}
-function removeFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  Object.assign(e.currentTarget.style, inputStyle());
-}
-
-/* ------------------------------------------------------------------ */
-/*  Top bar component                                                  */
-/* ------------------------------------------------------------------ */
-function TopBar() {
-  const { user, logout } = useAuth();
-  return (
-    <nav style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 2rem", background: "rgba(6,14,18,0.7)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderBottom: `1px solid ${C.glow}10` }}>
-      <a href="/dashboard" style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.35rem", color: "#fff", textDecoration: "none", textShadow: `0 0 20px ${C.glow}30` }}>OneAgent</a>
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-        <a href="/keys" style={{ fontFamily: "var(--font-dm), sans-serif", fontSize: "0.85rem", color: C.muted, textDecoration: "none", transition: "color 0.2s" }} onMouseEnter={(e) => (e.currentTarget.style.color = C.text)} onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(216,237,230,0.40)")}>Keys</a>
-        <span style={{ fontFamily: "var(--font-dm), sans-serif", fontSize: "0.82rem", color: C.faint }}>{user?.email}</span>
-        <button onClick={() => logout()} style={{ padding: "0.4rem 0.9rem", borderRadius: 8, border: `1px solid ${C.faint}`, background: "transparent", color: C.muted, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.8rem", cursor: "pointer", transition: "border-color 0.2s, color 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = `${C.glow}55`; e.currentTarget.style.color = C.text; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.faint; e.currentTarget.style.color = "rgba(216,237,230,0.40)"; }}>
-          Logout
-        </button>
-      </div>
-    </nav>
-  );
-}
+import { C, inputStyle, buttonStyle, labelStyle, glassCard } from "../lib/theme";
+import { MODEL_OPTIONS } from "../lib/models";
+import type { Agent, LlmConfig } from "../lib/types";
+import { fontVars } from "../components/fonts";
+import { useKeyframes } from "../components/useKeyframes";
+import { Orb } from "../components/Orb";
+import { MeshGradient } from "../components/MeshGradient";
+import { TopBar } from "../components/TopBar";
+import { applyFocus, removeFocus } from "../components/FocusHandlers";
 
 /* ================================================================== */
 /*  Dashboard page                                                     */
 /* ================================================================== */
 function DashboardContent() {
-  useKeyframes();
+  useKeyframes("dashboard-kf");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [configs, setConfigs] = useState<LlmConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,24 +86,11 @@ function DashboardContent() {
 
   const selectStyle: React.CSSProperties = { ...inputStyle(), appearance: "none" as const, cursor: "pointer" };
 
-  const MODEL_OPTIONS: Record<string, { id: string; label: string }[]> = {
-    anthropic: [
-      { id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5" },
-      { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
-      { id: "claude-opus-4-6", label: "Claude Opus 4.6" },
-    ],
-    openai: [
-      { id: "gpt-4o", label: "GPT-4o" },
-      { id: "gpt-4o-mini", label: "GPT-4o Mini" },
-      { id: "o3-mini", label: "o3-mini" },
-    ],
-  };
-
   return (
-    <div className={`${instrumentSerif.variable} ${dmSans.variable} ${lora.variable}`} style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "var(--font-dm), sans-serif", position: "relative" }}>
+    <div className={fontVars} style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "var(--font-dm), sans-serif", position: "relative" }}>
       <Orb size={400} color={C.glow} top="-5%" left="-8%" animation="drift1" duration="20s" opacity={0.08} />
       <Orb size={300} color={C.lavender} top="30%" left="80%" animation="drift2" duration="24s" opacity={0.06} />
-      <div style={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.2, background: `radial-gradient(ellipse 55% 45% at 20% 50%, ${C.glowDim} 0%, transparent 70%), radial-gradient(ellipse 45% 55% at 80% 30%, ${C.lavenderDim} 0%, transparent 70%)`, backgroundSize: "200% 200%, 200% 200%", animation: "meshShift 22s ease-in-out infinite", pointerEvents: "none" }} />
+      <MeshGradient opacity={0.2} threeGradients={false} />
 
       <TopBar />
 

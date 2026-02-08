@@ -1,77 +1,23 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Instrument_Serif, DM_Sans, Lora } from "next/font/google";
 import { useEffect, useState, FormEvent } from "react";
-import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
 import { Protected } from "../lib/protected";
-import { C, inputStyle, inputFocusCSS, buttonStyle, labelStyle, glassCard } from "../lib/theme";
-
-const instrumentSerif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-instrument" });
-const dmSans = DM_Sans({ subsets: ["latin"], weight: ["300", "400", "500", "600"], variable: "--font-dm" });
-const lora = Lora({ subsets: ["latin"], weight: ["400", "500"], style: ["normal", "italic"], variable: "--font-lora" });
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-interface LlmConfig {
-  id: string;
-  provider: string;
-  label: string;
-  is_default: boolean;
-  inserted_at: string;
-}
-
-interface Credential {
-  id: string;
-  name: string;
-  service: string;
-  credential_type: string;
-  inserted_at: string;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Keyframes                                                          */
-/* ------------------------------------------------------------------ */
-function useKeyframes() {
-  useEffect(() => {
-    const id = "keys-kf";
-    if (document.getElementById(id)) return;
-    const s = document.createElement("style");
-    s.id = id;
-    s.textContent = `
-      @keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)} 25%{transform:translate(50px,-35px) scale(1.08)} 50%{transform:translate(-25px,45px) scale(0.95)} 75%{transform:translate(35px,20px) scale(1.04)} }
-      @keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)} 25%{transform:translate(-40px,40px) scale(1.06)} 50%{transform:translate(30px,-25px) scale(0.93)} 75%{transform:translate(-15px,-50px) scale(1.02)} }
-      @keyframes meshShift { 0%{background-position:0% 50%,100% 50%,50% 0%} 25%{background-position:100% 0%,0% 100%,50% 50%} 50%{background-position:50% 100%,50% 0%,0% 50%} 75%{background-position:0% 0%,100% 100%,100% 50%} 100%{background-position:0% 50%,100% 50%,50% 0%} }
-    `;
-    document.head.appendChild(s);
-    return () => { const el = document.getElementById(id); if (el) el.remove(); };
-  }, []);
-}
-
-function Orb({ size, color, top, left, animation, duration, opacity = 0.2 }: { size: number; color: string; top: string; left: string; animation: string; duration: string; opacity?: number }) {
-  return <div style={{ position: "absolute", width: size, height: size, borderRadius: "50%", background: `radial-gradient(circle at 30% 30%, ${color}, transparent 70%)`, filter: `blur(${size * 0.4}px)`, opacity, top, left, animation: `${animation} ${duration} ease-in-out infinite`, pointerEvents: "none", willChange: "transform" }} />;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Focus helpers                                                      */
-/* ------------------------------------------------------------------ */
-function applyFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  const base = inputStyle();
-  const cssStr = Object.entries(base).map(([k, v]) => `${k.replace(/([A-Z])/g, "-$1").toLowerCase()}:${v}`).join(";");
-  e.currentTarget.setAttribute("style", `${cssStr}; ${inputFocusCSS}`);
-}
-function removeFocus(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  Object.assign(e.currentTarget.style, inputStyle());
-}
+import { C, inputStyle, buttonStyle, labelStyle, glassCard } from "../lib/theme";
+import type { LlmConfig, Credential } from "../lib/types";
+import { fontVars } from "../components/fonts";
+import { useKeyframes } from "../components/useKeyframes";
+import { Orb } from "../components/Orb";
+import { MeshGradient } from "../components/MeshGradient";
+import { TopBar } from "../components/TopBar";
+import { applyFocus, removeFocus } from "../components/FocusHandlers";
 
 /* ================================================================== */
 /*  Keys page content                                                  */
 /* ================================================================== */
 function KeysContent() {
-  useKeyframes();
-  const { user, logout } = useAuth();
+  useKeyframes("keys-kf");
 
   // LLM configs state
   const [configs, setConfigs] = useState<LlmConfig[]>([]);
@@ -224,23 +170,12 @@ function KeysContent() {
   const selectStyle: React.CSSProperties = { ...inputStyle(), appearance: "none" as const, cursor: "pointer" };
 
   return (
-    <div className={`${instrumentSerif.variable} ${dmSans.variable} ${lora.variable}`} style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "var(--font-dm), sans-serif", position: "relative" }}>
+    <div className={fontVars} style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "var(--font-dm), sans-serif", position: "relative" }}>
       <Orb size={400} color={C.glow} top="-5%" left="-8%" animation="drift1" duration="20s" opacity={0.06} />
       <Orb size={300} color={C.lavender} top="50%" left="85%" animation="drift2" duration="24s" opacity={0.05} />
-      <div style={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.15, background: `radial-gradient(ellipse 55% 45% at 20% 50%, ${C.glowDim} 0%, transparent 70%), radial-gradient(ellipse 45% 55% at 80% 30%, ${C.lavenderDim} 0%, transparent 70%)`, backgroundSize: "200% 200%, 200% 200%", animation: "meshShift 22s ease-in-out infinite", pointerEvents: "none" }} />
+      <MeshGradient opacity={0.15} threeGradients={false} />
 
-      {/* Nav */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem 2rem", background: "rgba(6,14,18,0.7)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderBottom: `1px solid ${C.glow}10` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <a href="/dashboard" style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.35rem", color: "#fff", textDecoration: "none", textShadow: `0 0 20px ${C.glow}30` }}>OneAgent</a>
-          <span style={{ color: C.faint }}>/</span>
-          <span style={{ fontFamily: "var(--font-dm), sans-serif", fontSize: "0.9rem", color: C.text }}>Keys</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <span style={{ fontFamily: "var(--font-dm), sans-serif", fontSize: "0.82rem", color: C.faint }}>{user?.email}</span>
-          <button onClick={() => logout()} style={{ padding: "0.4rem 0.9rem", borderRadius: 8, border: `1px solid ${C.faint}`, background: "transparent", color: C.muted, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.8rem", cursor: "pointer" }}>Logout</button>
-        </div>
-      </nav>
+      <TopBar breadcrumbs={[{ label: "Keys" }]} />
 
       <main style={{ position: "relative", zIndex: 2, maxWidth: 900, margin: "0 auto", padding: "2rem 1.5rem" }}>
         {loading && <div style={{ textAlign: "center", padding: "4rem 0", color: C.muted }}>Loading...</div>}
