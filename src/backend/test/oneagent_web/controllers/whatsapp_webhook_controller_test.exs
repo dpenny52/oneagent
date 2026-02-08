@@ -52,6 +52,75 @@ defmodule OneAgentWeb.WhatsAppWebhookControllerTest do
 
       assert json_response(conn, 403)["error"] == "Verification failed"
     end
+
+    test "returns 403 when challenge contains HTML/script injection", %{conn: conn} do
+      scope = scope_fixture()
+      channel = channel_fixture(scope)
+
+      conn =
+        get(conn, "/api/webhooks/whatsapp", %{
+          "hub.mode" => "subscribe",
+          "hub.verify_token" => channel.verify_token,
+          "hub.challenge" => "<script>alert('xss')</script>"
+        })
+
+      assert json_response(conn, 403)["error"] == "Verification failed"
+    end
+
+    test "returns 403 when challenge is empty string", %{conn: conn} do
+      scope = scope_fixture()
+      channel = channel_fixture(scope)
+
+      conn =
+        get(conn, "/api/webhooks/whatsapp", %{
+          "hub.mode" => "subscribe",
+          "hub.verify_token" => channel.verify_token,
+          "hub.challenge" => ""
+        })
+
+      assert json_response(conn, 403)["error"] == "Verification failed"
+    end
+
+    test "returns 403 when challenge is missing", %{conn: conn} do
+      scope = scope_fixture()
+      channel = channel_fixture(scope)
+
+      conn =
+        get(conn, "/api/webhooks/whatsapp", %{
+          "hub.mode" => "subscribe",
+          "hub.verify_token" => channel.verify_token
+        })
+
+      assert json_response(conn, 403)["error"] == "Verification failed"
+    end
+
+    test "returns 403 when challenge exceeds max length", %{conn: conn} do
+      scope = scope_fixture()
+      channel = channel_fixture(scope)
+
+      conn =
+        get(conn, "/api/webhooks/whatsapp", %{
+          "hub.mode" => "subscribe",
+          "hub.verify_token" => channel.verify_token,
+          "hub.challenge" => String.duplicate("a", 257)
+        })
+
+      assert json_response(conn, 403)["error"] == "Verification failed"
+    end
+
+    test "accepts challenge with hyphens and underscores", %{conn: conn} do
+      scope = scope_fixture()
+      channel = channel_fixture(scope)
+
+      conn =
+        get(conn, "/api/webhooks/whatsapp", %{
+          "hub.mode" => "subscribe",
+          "hub.verify_token" => channel.verify_token,
+          "hub.challenge" => "challenge-token_2024"
+        })
+
+      assert text_response(conn, 200) == "challenge-token_2024"
+    end
   end
 
   describe "POST /api/webhooks/whatsapp (incoming messages)" do

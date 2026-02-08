@@ -12,6 +12,9 @@ defmodule OneAgentWeb.WhatsAppWebhookController do
   GET /api/webhooks/whatsapp — Meta webhook verification handshake.
   Meta sends hub.mode, hub.verify_token, and hub.challenge as query params.
   """
+  # Meta challenges are numeric strings; allow alphanumeric, hyphens, underscores, max 256 chars
+  @challenge_pattern ~r/\A[a-zA-Z0-9_\-]{1,256}\z/
+
   def verify(conn, params) do
     mode = params["hub.mode"]
     token = params["hub.verify_token"]
@@ -19,10 +22,11 @@ defmodule OneAgentWeb.WhatsAppWebhookController do
 
     with "subscribe" <- mode,
          true <- is_binary(token) and token != "",
+         true <- is_binary(challenge) and Regex.match?(@challenge_pattern, challenge),
          %{} <- WhatsApp.get_channel_by_verify_token(token) do
       conn
       |> put_resp_content_type("text/plain")
-      |> send_resp(200, challenge || "")
+      |> send_resp(200, challenge)
     else
       _ ->
         conn
