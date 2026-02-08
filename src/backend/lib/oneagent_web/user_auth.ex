@@ -51,15 +51,17 @@ defmodule OneAgentWeb.UserAuth do
   end
 
   @doc """
-  Sets an httpOnly, Secure, SameSite=Lax cookie with the API token.
-  Call this after creating a token on login/register/etc.
+  Sets an httpOnly, Secure cookie with the API token.
+  Uses SameSite=None on prod (cross-site frontend/backend), Lax in dev.
   """
   def put_auth_cookie(conn, token) do
+    secure = secure_cookie?()
+
     conn
     |> put_resp_cookie(@auth_cookie, token,
       http_only: true,
-      secure: secure_cookie?(),
-      same_site: "Lax",
+      secure: secure,
+      same_site: if(secure, do: "None", else: "Lax"),
       max_age: @max_age,
       path: "/"
     )
