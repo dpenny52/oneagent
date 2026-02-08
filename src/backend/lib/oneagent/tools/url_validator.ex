@@ -128,7 +128,7 @@ defmodule OneAgent.Tools.UrlValidator do
   defp private_ip_tuple?({172, b, _, _}) when b >= 16 and b <= 31, do: true
   defp private_ip_tuple?({192, 168, _, _}), do: true
   defp private_ip_tuple?({169, 254, _, _}), do: true
-  defp private_ip_tuple?({0, 0, 0, 0}), do: true
+  defp private_ip_tuple?({0, _, _, _}), do: true
   # IPv6 loopback (::1)
   defp private_ip_tuple?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
   # IPv6 unspecified (::)

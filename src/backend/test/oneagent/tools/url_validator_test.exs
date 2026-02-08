@@ -86,6 +86,38 @@ defmodule OneAgent.Tools.UrlValidatorTest do
       assert msg =~ "private"
     end
 
+    test "rejects full 0.0.0.0/8 range (e.g. 0.1.2.3)" do
+      assert {:error, msg} = UrlValidator.validate("http://0.1.2.3")
+      assert msg =~ "private"
+    end
+
+    test "rejects 0.255.255.255 (0.0.0.0/8 upper bound)" do
+      assert {:error, msg} = UrlValidator.validate("http://0.255.255.255")
+      assert msg =~ "private"
+    end
+
+    # Alternative IP notation bypass vectors
+
+    test "rejects decimal IP notation (2130706433 = 127.0.0.1)" do
+      assert {:error, msg} = UrlValidator.validate("http://2130706433")
+      assert msg =~ "private"
+    end
+
+    test "rejects hex IP notation (0x7f000001 = 127.0.0.1)" do
+      assert {:error, msg} = UrlValidator.validate("http://0x7f000001")
+      assert msg =~ "private"
+    end
+
+    test "rejects octal IP notation (0177.0.0.1 = 127.0.0.1)" do
+      assert {:error, msg} = UrlValidator.validate("http://0177.0.0.1")
+      assert msg =~ "private"
+    end
+
+    test "rejects hex IPv6-mapped shorthand (::ffff:7f00:1 = 127.0.0.1)" do
+      assert {:error, msg} = UrlValidator.validate("http://[::ffff:7f00:1]")
+      assert msg =~ "private"
+    end
+
     test "rejects metadata.google.internal" do
       assert {:error, msg} = UrlValidator.validate("http://metadata.google.internal/computeMetadata/v1/")
       assert msg =~ "not allowed"
