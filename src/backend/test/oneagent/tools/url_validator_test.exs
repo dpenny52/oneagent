@@ -161,4 +161,91 @@ defmodule OneAgent.Tools.UrlValidatorTest do
       assert :ok = UrlValidator.validate("http://[2607:f8b0:4004:800::200e]")
     end
   end
+
+  describe "validate_and_resolve/1" do
+    test "resolves IP literal and returns it directly" do
+      assert {:ok, "8.8.8.8"} = UrlValidator.validate_and_resolve("http://8.8.8.8/path")
+    end
+
+    @tag :network
+    test "resolves hostname to an IP address" do
+      # Use a hostname that should resolve on most systems
+      case UrlValidator.validate_and_resolve("http://example.com") do
+        {:ok, resolved_ip} ->
+          assert is_binary(resolved_ip)
+          assert resolved_ip =~ ~r/^\d+\.\d+\.\d+\.\d+$/
+
+        {:error, "DNS resolution failed" <> _} ->
+          # DNS not available in this environment — skip
+          :ok
+      end
+    end
+
+    test "rejects private IP literals" do
+      assert {:error, msg} = UrlValidator.validate_and_resolve("http://127.0.0.1")
+      assert msg =~ "private"
+    end
+
+    test "rejects blocked hosts" do
+      assert {:error, msg} = UrlValidator.validate_and_resolve("http://localhost/api")
+      assert msg =~ "not allowed"
+    end
+
+    test "rejects non-http scheme" do
+      assert {:error, msg} = UrlValidator.validate_and_resolve("ftp://example.com")
+      assert msg =~ "http or https"
+    end
+
+    test "rejects non-string input" do
+      assert {:error, msg} = UrlValidator.validate_and_resolve(nil)
+      assert msg =~ "string"
+    end
+
+    test "returns error for non-resolving hostname" do
+      assert {:error, msg} = UrlValidator.validate_and_resolve("http://this-domain-does-not-exist-abc123xyz.invalid")
+      assert msg =~ "DNS resolution failed"
+    end
+  end
+
+  describe "check_ip/1" do
+    test "blocks loopback" do
+      assert {:error, _} = UrlValidator.check_ip({127, 0, 0, 1})
+    end
+
+    test "blocks private ranges" do
+      assert {:error, _} = UrlValidator.check_ip({10, 0, 0, 1})
+      assert {:error, _} = UrlValidator.check_ip({172, 16, 0, 1})
+      assert {:error, _} = UrlValidator.check_ip({192, 168, 1, 1})
+      assert {:error, _} = UrlValidator.check_ip({169, 254, 169, 254})
+    end
+
+    test "allows public IPs" do
+      assert :ok = UrlValidator.check_ip({8, 8, 8, 8})
+      assert :ok = UrlValidator.check_ip({93, 184, 216, 34})
+    end
+  end
+
+  describe "SsrfSafeReq.pinned_req_options/2" do
+    alias OneAgent.Tools.UrlValidator.SsrfSafeReq
+
+    test "rewrites URL host to resolved IP" do
+      opts = SsrfSafeReq.pinned_req_options("https://example.com/path?q=1", "93.184.216.34")
+      assert opts[:url] == "https://93.184.216.34/path?q=1"
+    end
+
+    test "sets connect_options hostname to original host" do
+      opts = SsrfSafeReq.pinned_req_options("https://example.com/path", "93.184.216.34")
+      assert opts[:connect_opts] == [connect_options: [hostname: "example.com"]]
+    end
+
+    test "omits connect_options when host matches resolved IP" do
+      opts = SsrfSafeReq.pinned_req_options("http://93.184.216.34/path", "93.184.216.34")
+      assert opts[:connect_opts] == []
+    end
+
+    test "disables redirects" do
+      opts = SsrfSafeReq.pinned_req_options("http://example.com", "93.184.216.34")
+      assert opts[:redirect_opts] == [redirect: false, max_redirects: 0]
+    end
+  end
 end

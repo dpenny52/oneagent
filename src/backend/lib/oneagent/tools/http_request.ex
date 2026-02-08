@@ -62,8 +62,8 @@ defmodule OneAgent.Tools.HttpRequest do
     method_str = String.downcase(input["method"] || "")
 
     with true <- method_str in @valid_methods,
-         :ok <- OneAgent.Tools.UrlValidator.validate(input["url"]) do
-      do_request(String.to_existing_atom(method_str), input, context)
+         {:ok, resolved_ip} <- OneAgent.Tools.UrlValidator.validate_and_resolve(input["url"]) do
+      do_request(String.to_existing_atom(method_str), input, context, resolved_ip)
     else
       false ->
         {:error, "Invalid HTTP method: #{input["method"]}. Must be one of: GET, HEAD, POST, PUT, PATCH, DELETE"}
@@ -73,15 +73,19 @@ defmodule OneAgent.Tools.HttpRequest do
     end
   end
 
-  defp do_request(method, input, context) do
+  defp do_request(method, input, context, resolved_ip) do
     url = input["url"]
     headers = build_headers(input["headers"] || %{}, context)
     body = input["body"]
 
-    opts = [headers: headers, receive_timeout: @request_timeout]
+    pinned_opts = OneAgent.Tools.UrlValidator.SsrfSafeReq.pinned_req_options(url, resolved_ip)
+
+    opts = [method: method, url: pinned_opts[:url], headers: headers, receive_timeout: @request_timeout]
+            ++ pinned_opts[:connect_opts]
+            ++ pinned_opts[:redirect_opts]
     opts = if body, do: Keyword.put(opts, :body, body), else: opts
 
-    case Req.request([method: method, url: url] ++ opts) do
+    case Req.request(opts) do
       {:ok, %Req.Response{status: status, body: resp_body, headers: resp_headers}} ->
         {:ok, %{
           "status" => status,

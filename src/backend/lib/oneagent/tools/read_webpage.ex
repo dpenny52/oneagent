@@ -42,15 +42,25 @@ defmodule OneAgent.Tools.ReadWebpage do
   def execute(input, _context) do
     url = input["url"]
 
-    with :ok <- OneAgent.Tools.UrlValidator.validate(url),
-         {:ok, resp} <- Req.get(url, headers: [{"user-agent", "OneAgent/1.0"}], receive_timeout: @request_timeout) do
-      handle_response(url, resp)
-    else
-      {:error, reason} when is_binary(reason) ->
-        {:error, reason}
+    alias OneAgent.Tools.UrlValidator.SsrfSafeReq
 
-      {:error, reason} ->
-        {:error, "Failed to fetch URL: #{inspect(reason)}"}
+    with {:ok, resolved_ip} <- OneAgent.Tools.UrlValidator.validate_and_resolve(url) do
+      pinned_opts = SsrfSafeReq.pinned_req_options(url, resolved_ip)
+
+      req_opts = [url: pinned_opts[:url], headers: [{"user-agent", "OneAgent/1.0"}], receive_timeout: @request_timeout]
+                  ++ pinned_opts[:connect_opts]
+                  ++ pinned_opts[:redirect_opts]
+
+      with {:ok, initial_resp} <- Req.get(req_opts),
+           {:ok, final_resp} <- SsrfSafeReq.follow_redirects_safely(initial_resp, Keyword.put(req_opts, :url, url)) do
+        handle_response(url, final_resp)
+      else
+        {:error, reason} when is_binary(reason) ->
+          {:error, reason}
+
+        {:error, reason} ->
+          {:error, "Failed to fetch URL: #{inspect(reason)}"}
+      end
     end
   end
 
