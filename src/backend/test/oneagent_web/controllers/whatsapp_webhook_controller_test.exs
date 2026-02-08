@@ -55,7 +55,40 @@ defmodule OneAgentWeb.WhatsAppWebhookControllerTest do
   end
 
   describe "POST /api/webhooks/whatsapp (incoming messages)" do
-    test "returns 200 immediately for valid payload", %{conn: conn} do
+    test "returns 200 with valid HMAC signature", %{conn: conn} do
+      scope = scope_fixture()
+      channel = channel_fixture(scope)
+      payload = webhook_payload(channel.phone_number_id)
+      # Encode to JSON string — this is the exact body that will be sent and captured by CacheRawBody
+      json_body = Jason.encode!(payload)
+      signature = compute_signature(json_body, "test_app_secret_123")
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("x-hub-signature-256", signature)
+        |> post("/api/webhooks/whatsapp", json_body)
+
+      assert response(conn, 200) == "ok"
+    end
+
+    test "returns 403 with invalid HMAC signature", %{conn: conn} do
+      scope = scope_fixture()
+      channel = channel_fixture(scope)
+      payload = webhook_payload(channel.phone_number_id)
+      json_body = Jason.encode!(payload)
+      signature = compute_signature(json_body, "wrong_secret")
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("x-hub-signature-256", signature)
+        |> post("/api/webhooks/whatsapp", json_body)
+
+      assert json_response(conn, 403)["error"] == "Invalid signature"
+    end
+
+    test "returns 403 with missing HMAC signature", %{conn: conn} do
       scope = scope_fixture()
       channel = channel_fixture(scope)
       payload = webhook_payload(channel.phone_number_id)
@@ -63,12 +96,23 @@ defmodule OneAgentWeb.WhatsAppWebhookControllerTest do
       conn =
         conn
         |> put_req_header("content-type", "application/json")
-        |> post("/api/webhooks/whatsapp", payload)
+        |> post("/api/webhooks/whatsapp", Jason.encode!(payload))
 
-      assert response(conn, 200) == "ok"
+      assert json_response(conn, 403)["error"] == "Invalid signature"
     end
 
-    test "returns 200 for empty/status-only payload", %{conn: conn} do
+    test "returns 403 for unknown phone_number_id (no channel)", %{conn: conn} do
+      payload = webhook_payload("unknown_phone_number")
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/webhooks/whatsapp", payload)
+
+      assert json_response(conn, 403)["error"] == "Invalid signature"
+    end
+
+    test "returns 200 for empty/status-only payload (no messages)", %{conn: conn} do
       payload = %{
         "object" => "whatsapp_business_account",
         "entry" => [
@@ -84,17 +128,6 @@ defmodule OneAgentWeb.WhatsAppWebhookControllerTest do
           }
         ]
       }
-
-      conn =
-        conn
-        |> put_req_header("content-type", "application/json")
-        |> post("/api/webhooks/whatsapp", payload)
-
-      assert response(conn, 200) == "ok"
-    end
-
-    test "returns 200 even with unknown phone_number_id", %{conn: conn} do
-      payload = webhook_payload("unknown_phone_number")
 
       conn =
         conn
