@@ -48,17 +48,25 @@ defmodule OneAgentWeb.Router do
     post "/confirm/:token", UserConfirmationController, :confirm
   end
 
-  # Google OAuth routes
+  # Rate limit for OAuth callback routes (10 req/min per IP)
+  pipeline :oauth_rate_limited do
+    plug OneAgentWeb.Plugs.RateLimit,
+      max_requests: 10,
+      interval_ms: 60_000,
+      bucket_prefix: "oauth"
+  end
+
+  # Google OAuth routes (rate limited)
   scope "/api/auth", OneAgentWeb do
-    pipe_through :api
+    pipe_through [:api, :oauth_rate_limited]
 
     get "/google", GoogleAuthController, :request
     get "/google/callback", GoogleAuthController, :callback
   end
 
-  # Gmail OAuth callback (public — Google redirects here)
+  # Gmail OAuth callback (public — Google redirects here, rate limited)
   scope "/api/auth", OneAgentWeb do
-    pipe_through :api
+    pipe_through [:api, :oauth_rate_limited]
 
     get "/gmail/callback", GmailAuthController, :callback
   end

@@ -94,6 +94,43 @@ defmodule OneAgentWeb.Plugs.RateLimitTest do
     end
   end
 
+  describe "OAuth rate limiting (10 req/min per IP)" do
+    test "blocks Google OAuth requests over the limit with 429", %{conn: _conn} do
+      # Exhaust the 10 request limit on the oauth bucket
+      for _ <- 1..10 do
+        build_conn()
+        |> put_req_header("accept", "application/json")
+        |> get("/api/auth/google")
+      end
+
+      # 11th request should be rate limited
+      resp =
+        build_conn()
+        |> put_req_header("accept", "application/json")
+        |> get("/api/auth/google")
+
+      assert resp.status == 429
+      assert %{"error" => "Too many requests." <> _} = json_response(resp, 429)
+    end
+
+    test "blocks Gmail OAuth callback requests over the limit with 429", %{conn: _conn} do
+      # Exhaust the 10 request limit on the shared oauth bucket
+      for _ <- 1..10 do
+        build_conn()
+        |> put_req_header("accept", "application/json")
+        |> get("/api/auth/gmail/callback", %{"code" => "fake", "state" => "fake"})
+      end
+
+      # 11th request should be rate limited
+      resp =
+        build_conn()
+        |> put_req_header("accept", "application/json")
+        |> get("/api/auth/gmail/callback", %{"code" => "fake", "state" => "fake"})
+
+      assert resp.status == 429
+    end
+  end
+
   describe "API rate limiting (60 req/min per user)" do
     test "allows many requests under the limit", %{conn: conn} do
       for _ <- 1..30 do
