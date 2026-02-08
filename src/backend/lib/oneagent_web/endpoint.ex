@@ -41,6 +41,7 @@ defmodule OneAgentWeb.Endpoint do
     allow_credentials: true
 
   plug Plug.RequestId
+  plug OneAgentWeb.Plugs.SecurityHeaders
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
   plug Plug.Parsers,
