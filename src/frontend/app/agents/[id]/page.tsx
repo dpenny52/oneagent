@@ -13,6 +13,13 @@ const instrumentSerif = Instrument_Serif({ subsets: ["latin"], weight: "400", st
 const dmSans = DM_Sans({ subsets: ["latin"], weight: ["300", "400", "500", "600"], variable: "--font-dm" });
 const lora = Lora({ subsets: ["latin"], weight: ["400", "500"], style: ["normal", "italic"], variable: "--font-lora" });
 
+import cronstrue from "cronstrue";
+
+function cronToHuman(cron: string): string {
+  try { return cronstrue.toString(cron, { use24HourTimeFormat: false }); }
+  catch { return cron; }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
@@ -530,10 +537,13 @@ function AgentDetailContent() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1.25rem" }}>
                   {schedules.map((s) => (
                     <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem 1rem", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${s.enabled ? `${C.glow}20` : C.faint}` }}>
-                      <button onClick={() => handleToggleSchedule(s)} style={{ width: 36, height: 20, borderRadius: 10, border: "none", background: s.enabled ? C.glow : "rgba(255,255,255,0.1)", cursor: "pointer", position: "relative", transition: "background 0.3s", flexShrink: 0 }}>
+                      <button onClick={() => handleToggleSchedule(s)} style={{ width: 36, height: 20, borderRadius: 10, border: "none", background: s.enabled ? C.glow : "rgba(255,255,255,0.1)", cursor: "pointer", position: "relative", transition: "background 0.3s", flexShrink: 0, alignSelf: "center" }}>
                         <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: s.enabled ? 19 : 3, transition: "left 0.3s" }} />
                       </button>
-                      <code style={{ color: C.phosphor, fontSize: "0.82rem", flexShrink: 0 }}>{s.cron}</code>
+                      <span style={{ flexShrink: 0, display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+                        <span style={{ color: C.phosphor, fontSize: "0.82rem" }}>{cronToHuman(s.cron)}</span>
+                        {cronToHuman(s.cron) !== s.cron && <code style={{ color: C.faint, fontSize: "0.62rem", marginTop: "-0.05rem" }}>{s.cron}</code>}
+                      </span>
                       <span style={{ fontSize: "0.82rem", color: C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.message || "(no message)"}</span>
                       {s.last_run_at && <span style={{ fontSize: "0.72rem", color: C.faint, flexShrink: 0 }}>Last: {new Date(s.last_run_at).toLocaleString()}</span>}
                       <button onClick={() => handleDeleteSchedule(s.id)} style={{ padding: "0.2rem 0.5rem", borderRadius: 6, border: "1px solid rgba(255,107,107,0.2)", background: "rgba(255,107,107,0.05)", color: C.danger, fontSize: "0.75rem", cursor: "pointer" }}>{"\u2715"}</button>
