@@ -35,6 +35,8 @@ defmodule OneAgent.Agents.Agent do
     :max_steps_per_run, :max_runs_per_day, :max_history_messages, :llm_config_id
   ]
 
+  @allowed_model_config_keys ~w(max_tokens)
+
   def changeset(agent, attrs) do
     agent
     |> cast(attrs, @required_fields ++ @optional_fields)
@@ -47,7 +49,34 @@ defmodule OneAgent.Agents.Agent do
     |> validate_number(:max_steps_per_run, greater_than: 0, less_than_or_equal_to: 500)
     |> validate_number(:max_runs_per_day, greater_than: 0, less_than_or_equal_to: 10_000)
     |> validate_number(:max_history_messages, greater_than_or_equal_to: 0, less_than_or_equal_to: 200)
+    |> validate_model_config()
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:llm_config_id)
   end
+
+  defp validate_model_config(changeset) do
+    case get_change(changeset, :model_config) do
+      nil ->
+        changeset
+
+      config when is_map(config) ->
+        unknown_keys = Map.keys(config) -- @allowed_model_config_keys
+        cond do
+          unknown_keys != [] ->
+            add_error(changeset, :model_config, "contains unknown keys: #{Enum.join(unknown_keys, ", ")}")
+
+          Map.has_key?(config, "max_tokens") and not valid_max_tokens?(config["max_tokens"]) ->
+            add_error(changeset, :model_config, "max_tokens must be an integer between 1 and 100000")
+
+          true ->
+            changeset
+        end
+
+      _other ->
+        add_error(changeset, :model_config, "must be a map")
+    end
+  end
+
+  defp valid_max_tokens?(value) when is_integer(value), do: value >= 1 and value <= 100_000
+  defp valid_max_tokens?(_), do: false
 end

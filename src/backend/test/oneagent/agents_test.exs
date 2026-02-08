@@ -77,6 +77,51 @@ defmodule OneAgent.AgentsTest do
       attrs = valid_agent_attributes(%{"description" => String.duplicate("a", 10_000)})
       assert {:ok, %Agent{}} = Agents.create_agent(scope, attrs)
     end
+
+    test "accepts valid model_config with max_tokens", %{scope: scope} do
+      attrs = valid_agent_attributes(%{"model_config" => %{"max_tokens" => 4096}})
+      assert {:ok, %Agent{} = agent} = Agents.create_agent(scope, attrs)
+      assert agent.model_config == %{"max_tokens" => 4096}
+    end
+
+    test "accepts empty model_config", %{scope: scope} do
+      attrs = valid_agent_attributes(%{"model_config" => %{}})
+      assert {:ok, %Agent{}} = Agents.create_agent(scope, attrs)
+    end
+
+    test "rejects model_config with unknown keys", %{scope: scope} do
+      attrs = valid_agent_attributes(%{"model_config" => %{"max_tokens" => 4096, "evil" => "payload", "temperature" => 0.5}})
+      assert {:error, changeset} = Agents.create_agent(scope, attrs)
+      assert %{model_config: [msg]} = errors_on(changeset)
+      assert msg =~ "unknown keys"
+      assert msg =~ "evil"
+      assert msg =~ "temperature"
+    end
+
+    test "rejects model_config with non-integer max_tokens", %{scope: scope} do
+      attrs = valid_agent_attributes(%{"model_config" => %{"max_tokens" => "lots"}})
+      assert {:error, changeset} = Agents.create_agent(scope, attrs)
+      assert %{model_config: ["max_tokens must be an integer between 1 and 100000"]} = errors_on(changeset)
+    end
+
+    test "rejects model_config with max_tokens out of range", %{scope: scope} do
+      attrs = valid_agent_attributes(%{"model_config" => %{"max_tokens" => 0}})
+      assert {:error, changeset} = Agents.create_agent(scope, attrs)
+      assert %{model_config: ["max_tokens must be an integer between 1 and 100000"]} = errors_on(changeset)
+
+      attrs = valid_agent_attributes(%{"model_config" => %{"max_tokens" => 100_001}})
+      assert {:error, changeset} = Agents.create_agent(scope, attrs)
+      assert %{model_config: ["max_tokens must be an integer between 1 and 100000"]} = errors_on(changeset)
+    end
+
+    test "rejects model_config with arbitrary large data", %{scope: scope} do
+      # Attempt to store a large arbitrary map — should be rejected due to unknown keys
+      big_map = for i <- 1..100, into: %{}, do: {"key_#{i}", String.duplicate("x", 1000)}
+      attrs = valid_agent_attributes(%{"model_config" => big_map})
+      assert {:error, changeset} = Agents.create_agent(scope, attrs)
+      assert %{model_config: [msg]} = errors_on(changeset)
+      assert msg =~ "unknown keys"
+    end
   end
 
   describe "update_agent/2" do
