@@ -213,11 +213,12 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE}/api/auth/magic-link/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ token }),
       });
       const data = await res.json();
-      if (res.ok && data.data?.token) {
-        authLogin(data.data.token);
+      if (res.ok && data.data?.user) {
+        authLogin();
         window.location.href = "/dashboard";
       } else {
         setError(data.error || "Invalid or expired magic link.");
@@ -260,11 +261,12 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ user: { email, password } }),
       });
       const data = await res.json();
-      if (res.ok && data.data?.token) {
-        authLogin(data.data.token);
+      if (res.ok && data.data?.user) {
+        authLogin();
         window.location.href = "/dashboard";
       } else {
         setError(data.error || "Invalid email or password.");

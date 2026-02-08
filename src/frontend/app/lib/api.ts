@@ -13,24 +13,20 @@ async function request<T>(
   path: string,
   body?: unknown,
 ): Promise<ApiResult<T>> {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   try {
     const res = await fetch(`${BASE}${path}`, {
       method,
       headers,
+      credentials: "include",
       body: body ? JSON.stringify(body) : undefined,
     });
 
     if (res.status === 401) {
       if (typeof window !== "undefined") {
-        localStorage.removeItem("auth_token");
         window.location.href = "/login";
       }
       return { ok: false, error: "Unauthorized", status: 401 };

@@ -2,6 +2,7 @@ defmodule OneAgentWeb.UserRegistrationController do
   use OneAgentWeb, :controller
 
   alias OneAgent.Accounts
+  import OneAgentWeb.UserAuth, only: [put_auth_cookie: 2]
 
   action_fallback OneAgentWeb.FallbackController
 
@@ -11,6 +12,7 @@ defmodule OneAgentWeb.UserRegistrationController do
         token = Accounts.create_user_api_token(user)
 
         conn
+        |> put_auth_cookie(token)
         |> put_status(:created)
         |> put_view(OneAgentWeb.AuthJSON)
         |> render("user.json", user: user, token: token)

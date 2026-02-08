@@ -316,5 +316,5 @@ Run through these flows using the Chrome MCP tools (`tabs_context_mcp`, `navigat
 - Use `form_input` with `ref` from `read_page` to fill inputs
 - Use `computer` with `action: "screenshot"` to visually verify state
 - Use `get_page_text` to quickly check page content
-- Auth token is stored in localStorage — use `javascript_tool` to check: `localStorage.getItem("auth_token")`
+- Auth token is stored in an httpOnly cookie (`_oneagent_token`) — not accessible via JavaScript (by design)
 - Rate limiting: auth routes are limited to 5 req/min — if you hit 429, wait 60 seconds

@@ -4,6 +4,7 @@ defmodule OneAgentWeb.GoogleAuthController do
   plug Ueberauth
 
   alias OneAgent.Accounts
+  import OneAgentWeb.UserAuth, only: [put_auth_cookie: 2]
 
   def request(conn, _params) do
     # Ueberauth handles the redirect automatically via the plug
@@ -16,6 +17,7 @@ defmodule OneAgentWeb.GoogleAuthController do
         token = Accounts.create_user_api_token(user)
 
         conn
+        |> put_auth_cookie(token)
         |> put_status(:ok)
         |> put_view(OneAgentWeb.AuthJSON)
         |> render("user.json", user: user, token: token)

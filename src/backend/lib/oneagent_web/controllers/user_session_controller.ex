@@ -2,6 +2,7 @@ defmodule OneAgentWeb.UserSessionController do
   use OneAgentWeb, :controller
 
   alias OneAgent.Accounts
+  import OneAgentWeb.UserAuth, only: [put_auth_cookie: 2, delete_auth_cookie: 1]
 
   action_fallback OneAgentWeb.FallbackController
 
@@ -12,6 +13,7 @@ defmodule OneAgentWeb.UserSessionController do
         token = Accounts.create_user_api_token(user)
 
         conn
+        |> put_auth_cookie(token)
         |> put_status(:ok)
         |> put_view(OneAgentWeb.AuthJSON)
         |> render("user.json", user: user, token: token)
@@ -46,6 +48,7 @@ defmodule OneAgentWeb.UserSessionController do
         api_token = Accounts.create_user_api_token(user)
 
         conn
+        |> put_auth_cookie(api_token)
         |> put_status(:ok)
         |> put_view(OneAgentWeb.AuthJSON)
         |> render("user.json", user: user, token: api_token)
@@ -64,6 +67,7 @@ defmodule OneAgentWeb.UserSessionController do
     if token, do: Accounts.delete_user_api_token(token)
 
     conn
+    |> delete_auth_cookie()
     |> put_status(:ok)
     |> put_view(OneAgentWeb.AuthJSON)
     |> render("message.json", message: "Logged out successfully.")
@@ -89,6 +93,7 @@ defmodule OneAgentWeb.UserSessionController do
           new_token = Accounts.create_user_api_token(updated_user)
 
           conn
+          |> put_auth_cookie(new_token)
           |> put_status(:ok)
           |> put_view(OneAgentWeb.AuthJSON)
           |> render("user.json", user: updated_user, token: new_token)

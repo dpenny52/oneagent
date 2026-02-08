@@ -14,7 +14,7 @@ interface User {
 interface AuthCtx {
   user: User | null;
   loading: boolean;
-  login: (token: string) => void;
+  login: () => void;
   logout: () => Promise<void>;
 }
 
@@ -33,21 +33,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("auth_token");
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    // Cookie is sent automatically via credentials: 'include'
     api.get<User>("/api/auth/me").then((res) => {
       if (res.ok) setUser(res.data);
-      else localStorage.removeItem("auth_token");
       setLoading(false);
     });
   }, []);
 
-  const login = useCallback((token: string) => {
-    localStorage.setItem("auth_token", token);
-    // Fetch user profile after storing token
+  const login = useCallback(() => {
+    // Cookie was set by the backend response. Fetch user profile.
     api.get<User>("/api/auth/me").then((res) => {
       if (res.ok) setUser(res.data);
     });
@@ -55,7 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await api.del("/api/auth/logout");
-    localStorage.removeItem("auth_token");
     setUser(null);
     window.location.href = "/login";
   }, []);

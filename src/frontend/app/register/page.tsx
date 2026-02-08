@@ -74,10 +74,10 @@ export default function RegisterPage() {
     if (password.length < 12) { setError("Password must be at least 12 characters."); return; }
     setLoading(true);
     setError("");
-    const res = await api.post<{ token: string }>("/api/auth/register", { user: { email, password } });
+    const res = await api.post<{ user: { id: string; email: string } }>("/api/auth/register", { user: { email, password } });
     setLoading(false);
     if (res.ok) {
-      login(res.data.token);
+      login();
       window.location.href = "/dashboard";
     } else {
       if (res.status === 403) {
