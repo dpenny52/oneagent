@@ -71,24 +71,6 @@ npm install
 npm run dev             # http://localhost:3000
 ```
 
-## Project Structure
-
-```
-oneagent/
-  src/
-    frontend/            # Next.js 16 — landing pages, login, app UI
-      app/
-        page.tsx         # Landing page (bioluminescent design)
-        login/page.tsx   # Login — email/password + magic link
-        globals.css
-    backend/             # Phoenix 1.8 — API-only, no HTML
-      lib/
-        oneagent/        # Business logic (Accounts context)
-        oneagent_web/    # Controllers, router, auth plugs
-      config/
-      priv/repo/         # Ecto migrations
-```
-
 ## Frontend
 
 | | |
@@ -97,11 +79,6 @@ oneagent/
 | **Animations** | Framer Motion 12.33 |
 | **Styling** | All inline `style={{}}` — no Tailwind in components |
 | **Fonts** | Google Fonts via `next/font/google` |
-
-### Pages
-
-- **`/`** — Landing page with bioluminescent aesthetic: floating spores, ambient orbs, glass-morphism cards, scroll-triggered animations
-- **`/login`** — Auth page with password and magic link modes, connected to the backend API
 
 ### Commands
 
@@ -157,6 +134,7 @@ npm run lint       # ESLint
 | `GET` | `/api/agents/:id/messages` | Chat history |
 | `DELETE` | `/api/agents/:id/messages` | Clear chat history |
 | `CRUD` | `/api/agents/:id/schedules` | Cron schedule management |
+| `GET` | `/api/agents/:id/goals` | List agent goals with progress |
 | `CRUD` | `/api/credentials` | Encrypted credential storage |
 | `CRUD` | `/api/llm-configs` | LLM API key management |
 | `CRUD` | `/api/whatsapp-channels` | WhatsApp channel config |
@@ -171,6 +149,8 @@ All agent/credential/channel routes require Bearer auth. Webhook routes are unau
 - **Scheduled Execution** — Agents support multiple cron schedules that fire automatically via Oban. A sweeper checks every minute and enqueues per-schedule execution jobs with deduplication. Agents can also manage their own schedules via tools.
 - **Permission Buckets** — Agents operate within granted permission buckets (web_access, email, spending, communication, data_write, gmail) that control which tools they can use.
 - **Gmail Integration** — OAuth2 flow connects a user's Gmail account. Agents with the `gmail` bucket can list, search, and read emails.
+- **Persistent Memory** — Agents can store and recall key-value memories across conversations via the `store_memory` and `recall_memory` tools. Memories support full-text search and are scoped per agent.
+- **Goals** — Agents can create and track goals with discrete steps. Each goal automatically gets an hourly review schedule, and individual steps can have their own cron schedules. Goals can be paused, resumed, completed, or abandoned.
 - **User Isolation** — All agent/credential/channel queries are scoped to the authenticated user. Users can only see and manage their own resources.
 
 ### Commands
