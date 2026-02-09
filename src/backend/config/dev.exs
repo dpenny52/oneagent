@@ -68,6 +68,9 @@ config :oneagent, OneAgent.Mailer,
 
 config :swoosh, :api_client, Swoosh.ApiClient.Finch
 
+# Allow CORS from host-mapped ports when running in a container
+config :oneagent, cors_origin: ["http://localhost:3000", "http://localhost:3001"]
+
 # Cloak encryption key for development (NOT for production use)
 config :oneagent, OneAgent.Vault,
   ciphers: [
