@@ -2,9 +2,9 @@ import Config
 
 # Configure your database
 config :oneagent, OneAgent.Repo,
-  username: "dpenny",
-  password: "",
-  hostname: "localhost",
+  username: System.get_env("PGUSER", "dpenny"),
+  password: System.get_env("PGPASSWORD", ""),
+  hostname: System.get_env("DATABASE_HOST", "localhost"),
   database: "oneagent_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
@@ -19,7 +19,7 @@ config :oneagent, OneAgent.Repo,
 config :oneagent, OneAgentWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}],
+  http: [ip: if(System.get_env("DEVCONTAINER"), do: {0, 0, 0, 0}, else: {127, 0, 0, 1})],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
