@@ -28,7 +28,28 @@ Agents operate within permission buckets that control which tools they can use. 
 - **WhatsApp** — Agents receive and reply to WhatsApp messages via Meta's Cloud API. Configure a channel linking a phone number to an agent.
 - **Cron Schedules** — Agents can have multiple cron schedules that fire automatically. Agents can also manage their own schedules via tools.
 
-## Quick Start
+## Quick Start (Docker)
+
+The easiest way to get running. Requires Docker and Docker Compose.
+
+```bash
+docker compose up -d          # Start app + Postgres containers
+docker compose exec app bash  # Shell into the dev container
+
+# Inside the container:
+cd src/backend
+mix deps.get
+mix ecto.setup
+mix phx.server &              # http://localhost:4001
+
+cd /workspace/src/frontend
+npm install
+npm run dev                   # http://localhost:3001
+```
+
+Ports are mapped to **3001** (frontend) and **4001** (backend) on the host to avoid conflicts with local services.
+
+## Quick Start (Local)
 
 **Prerequisites:** Node.js 20+, Elixir 1.19+, PostgreSQL
 
