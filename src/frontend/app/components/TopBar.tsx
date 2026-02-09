@@ -26,11 +26,13 @@ export function TopBar({ breadcrumbs }: { breadcrumbs?: { label: string; href?: 
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         borderBottom: `1px solid ${C.glow}10`,
+        willChange: "transform",
+        transform: "translateZ(0)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
         <a href="/dashboard" style={{ display: "flex", alignItems: "center", textDecoration: "none" }}>
-          <Logo size={32} />
+          <Logo size={48} />
         </a>
         {breadcrumbs?.map((bc, i) => (
           <span key={i} style={{ display: "contents" }}>

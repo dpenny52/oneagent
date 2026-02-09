@@ -72,6 +72,8 @@ export default function BioluminescentGardenPage() {
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
           borderBottom: `1px solid ${C.glow}10`,
+          willChange: "transform",
+          transform: "translateZ(0)",
         }}
       >
         <a href="/" style={{ display: "flex", alignItems: "center", textDecoration: "none" }}>

@@ -32,6 +32,8 @@ export function Orb({
         animation: `${animation} ${duration} ease-in-out infinite`,
         pointerEvents: "none",
         willChange: "transform",
+        transform: "translateZ(0)",
+        contain: "strict" as string,
       }}
     />
   );

@@ -12,6 +12,8 @@ export function SporeField({ spores }: { spores: Spore[] }) {
         pointerEvents: "none",
         zIndex: 1,
         overflow: "hidden",
+        willChange: "transform",
+        transform: "translateZ(0)",
       }}
     >
       {spores.map((sp) => (
@@ -25,7 +27,8 @@ export function SporeField({ spores }: { spores: Spore[] }) {
             height: sp.size,
             borderRadius: "50%",
             backgroundColor: sp.color,
-            animation: `sporeFloat ${sp.duration}s ease-in-out ${sp.delay}s infinite, sporePulse ${sp.duration * 0.6}s ease-in-out ${sp.delay}s infinite`,
+            animation: `sporeFloat ${sp.duration}s ease-in-out ${sp.delay}s infinite`,
+            willChange: "transform, opacity",
           }}
         />
       ))}

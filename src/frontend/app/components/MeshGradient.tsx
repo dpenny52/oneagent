@@ -29,6 +29,8 @@ export function MeshGradient({ opacity = 0.3, threeGradients = true }: { opacity
         backgroundSize: bgSize,
         animation: "meshShift 22s ease-in-out infinite",
         pointerEvents: "none",
+        willChange: "transform",
+        transform: "translateZ(0)",
       }}
     />
   );
