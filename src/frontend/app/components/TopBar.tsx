@@ -2,6 +2,7 @@
 
 import { useAuth } from "../lib/auth";
 import { C } from "../lib/theme";
+import { Logo } from "./Logo";
 
 /**
  * Sticky top navigation bar used on authenticated pages.
@@ -28,17 +29,8 @@ export function TopBar({ breadcrumbs }: { breadcrumbs?: { label: string; href?: 
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-        <a
-          href="/dashboard"
-          style={{
-            fontFamily: "var(--font-instrument), serif",
-            fontSize: "1.35rem",
-            color: "#fff",
-            textDecoration: "none",
-            textShadow: `0 0 20px ${C.glow}30`,
-          }}
-        >
-          OneAgent
+        <a href="/dashboard" style={{ display: "flex", alignItems: "center", textDecoration: "none" }}>
+          <Logo size={32} />
         </a>
         {breadcrumbs?.map((bc, i) => (
           <span key={i} style={{ display: "contents" }}>

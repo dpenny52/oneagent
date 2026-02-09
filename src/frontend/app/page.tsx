@@ -11,6 +11,7 @@ import { Orb } from "./components/Orb";
 import { SporeField } from "./components/SporeField";
 import { MeshGradient } from "./components/MeshGradient";
 import { generateSpores } from "./components/generateSpores";
+import { Logo } from "./components/Logo";
 import { GlowingVine } from "./components/landing/GlowingVine";
 import { LeafDivider } from "./components/landing/LeafDivider";
 import { DeployButton } from "./components/landing/DeployButton";
@@ -73,17 +74,8 @@ export default function BioluminescentGardenPage() {
           borderBottom: `1px solid ${C.glow}10`,
         }}
       >
-        <a
-          href="/"
-          style={{
-            fontFamily: "var(--font-instrument), serif",
-            fontSize: "1.35rem",
-            color: "#fff",
-            textDecoration: "none",
-            textShadow: `0 0 20px ${C.glow}30`,
-          }}
-        >
-          OneAgent
+        <a href="/" style={{ display: "flex", alignItems: "center", textDecoration: "none" }}>
+          <Logo size={48} />
         </a>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           {!authLoading && (
