@@ -49,6 +49,11 @@ npm run dev                   # http://localhost:3001
 
 Ports are mapped to **3001** (frontend) and **4001** (backend) on the host to avoid conflicts with local services.
 
+> **Note:** Inside the container the backend runs on port 4001, so the frontend needs to know about it. Create (or verify) `src/frontend/.env.local` with:
+> ```
+> NEXT_PUBLIC_API_URL=http://localhost:4001
+> ```
+
 ## Quick Start (Local)
 
 **Prerequisites:** Node.js 20+, Elixir 1.19+, PostgreSQL
