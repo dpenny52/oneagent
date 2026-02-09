@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { C } from "../../lib/theme";
 
@@ -14,6 +17,13 @@ export function FeatureCard({
   glowColor: string;
   delay: number;
 }) {
+  const [hovered, setHovered] = useState(false);
+
+  // Both states must have the same shadow structure (outer, outer, inset)
+  // so CSS can interpolate between them smoothly
+  const restingShadow = `0 0 30px ${glowColor}05, 0 0 0px transparent, inset 0 0 30px ${glowColor}02`;
+  const hoverShadow = `0 8px 40px ${glowColor}15, 0 0 60px ${glowColor}08, inset 0 0 30px ${glowColor}02`;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 40 }}
@@ -22,8 +32,10 @@ export function FeatureCard({
       transition={{ duration: 0.7, delay, ease: "easeOut" }}
       whileHover={{
         y: -4,
-        boxShadow: `0 8px 40px ${glowColor}15, 0 0 60px ${glowColor}08`,
+        transition: { duration: 0.4, ease: "easeOut" },
       }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         flex: "1 1 300px",
         maxWidth: 380,
@@ -33,7 +45,8 @@ export function FeatureCard({
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         border: `1px solid ${glowColor}18`,
-        boxShadow: `0 0 30px ${glowColor}05, inset 0 0 30px ${glowColor}02`,
+        boxShadow: hovered ? hoverShadow : restingShadow,
+        transition: "box-shadow 0.4s ease-out",
         position: "relative",
         overflow: "hidden",
       }}

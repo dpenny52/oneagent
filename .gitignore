@@ -13,6 +13,7 @@ yarn-debug.log*
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+src/frontend/app/logos/
 DEPLOY_TASKS.md
 ralph.sh
 .ralph-loop.log
