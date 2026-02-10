@@ -16,18 +16,23 @@ Agents operate within permission buckets that control which tools they can use. 
 | `gmail` | `check_email` | Read Gmail inbox — list/search emails, read full messages (OAuth2) |
 | `google_calendar` | `manage_calendar` | CRUD Google Calendar events — list, create, update, delete, search (OAuth2) |
 | `spending` | — | Reserved for financial transaction tools |
-| `communication` | — | Reserved for messaging tools (WhatsApp, Slack) |
+| `web_search` | `web_search` | Search the web via Tavily API |
+| `whatsapp` | `send_whatsapp` | Send outbound WhatsApp messages via Cloud API |
+| `communication` | — | Reserved for messaging tools (Slack, etc.) |
 | `data_write` | — | Allow writing/modifying external data |
 | *(always available)* | `store_memory` | Persist key-value data across conversations |
 | *(always available)* | `recall_memory` | Retrieve stored memories |
 | *(always available)* | `list_schedules` | View agent's cron schedules |
 | *(always available)* | `manage_schedule` | Create, update, or delete cron schedules |
+| *(always available)* | `manage_goal` | Create, update, complete, pause, resume, abandon, or delete goals |
+| *(always available)* | `manage_goal_step` | Manage goal steps and step schedules |
+| *(always available)* | `list_goals` | List goals with progress |
 
 ### Integrations
 
 - **Gmail** — OAuth2 flow via `/keys` page. User connects their Google account, agent gets read-only access to their inbox via the `check_email` tool.
 - **Google Calendar** — OAuth2 flow via `/keys` page. User connects their Google Calendar, agent gets full event management (list, create, update, delete, search) via the `manage_calendar` tool.
-- **WhatsApp** — Agents receive and reply to WhatsApp messages via Meta's Cloud API. Configure a channel linking a phone number to an agent.
+- **WhatsApp** — Agents receive and reply to WhatsApp messages via Meta's Cloud API, and can proactively send outbound messages via the `send_whatsapp` tool (e.g., from scheduled tasks). Configure a channel linking a phone number to an agent.
 - **Cron Schedules** — Agents can have multiple cron schedules that fire automatically. Agents can also manage their own schedules via tools.
 
 ## Quick Start (Docker)
@@ -151,7 +156,7 @@ All agent/credential/channel routes require Bearer auth. Webhook routes are unau
 
 - **Chat History** — Conversation messages persist across runs in `agent_messages`. Agents recall prior context (configurable limit via `max_history_messages`, default 20). View with `GET /api/agents/:id/messages`, clear with `DELETE`.
 - **Scheduled Execution** — Agents support multiple cron schedules that fire automatically via Oban. A sweeper checks every minute and enqueues per-schedule execution jobs with deduplication. Agents can also manage their own schedules via tools.
-- **Permission Buckets** — Agents operate within granted permission buckets (web_access, email, spending, communication, data_write, gmail, google_calendar) that control which tools they can use.
+- **Permission Buckets** — Agents operate within granted permission buckets (web_access, email, spending, communication, data_write, gmail, web_search, google_calendar, whatsapp) that control which tools they can use.
 - **Gmail Integration** — OAuth2 flow connects a user's Gmail account. Agents with the `gmail` bucket can list, search, and read emails.
 - **Google Calendar Integration** — OAuth2 flow connects a user's Google Calendar. Agents with the `google_calendar` bucket can list, create, update, delete, and search calendar events.
 - **Persistent Memory** — Agents can store and recall key-value memories across conversations via the `store_memory` and `recall_memory` tools. Memories support full-text search and are scoped per agent.

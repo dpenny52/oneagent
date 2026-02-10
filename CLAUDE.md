@@ -92,7 +92,7 @@ PostgreSQL must be running. Dev config uses `dpenny` user with no password. See 
 - **Auth**: Bearer token (API tokens stored SHA-256 hashed), rate limiting via Hammer
 - **Scheduling**: Oban with `ScheduleChecker` (every minute) + `ScheduledExecution` workers
 
-### Agent Tools (13 total)
+### Agent Tools (14 total)
 
 Tools registered in `OneAgent.Tools`, filtered by agent's active permission buckets. `nil` bucket = always available.
 
@@ -103,6 +103,7 @@ Tools registered in `OneAgent.Tools`, filtered by agent's active permission buck
 | `send_email` | email | Send emails with validation |
 | `check_email` | gmail | Read Gmail via OAuth2 (list/read actions) |
 | `manage_calendar` | google_calendar | CRUD Google Calendar events via OAuth2 (list/create/update/delete/search) |
+| `send_whatsapp` | whatsapp | Send outbound WhatsApp messages via Cloud API |
 | `web_search` | web_search | Search web via Tavily API |
 | `store_memory` | nil | Persist key-value memories |
 | `recall_memory` | nil | Recall by key, FTS search, or list all |
@@ -114,7 +115,7 @@ Tools registered in `OneAgent.Tools`, filtered by agent's active permission buck
 
 ### Key Integrations
 
-- **WhatsApp**: `whatsapp_channels` maps phone_number_id → agent + credential. Webhook is async (returns 200, processes via TaskSupervisor). HMAC-SHA256 verification via `CacheRawBody` plug.
+- **WhatsApp**: `whatsapp_channels` maps phone_number_id → agent + credential. Webhook is async (returns 200, processes via TaskSupervisor). HMAC-SHA256 verification via `CacheRawBody` plug. `send_whatsapp` tool enables proactive outbound messages (webhook-restricted to prevent prompt injection).
 - **Gmail**: OAuth2 flow (`GET /api/auth/gmail` → Google → callback → store refresh_token). `check_email` tool refreshes token on each use.
 - **Google Calendar**: OAuth2 flow (`GET /api/auth/calendar` → Google → callback → store refresh_token). `manage_calendar` tool supports list/create/update/delete/search events. Uses `calendar.events` scope. Webhook-restricted: mutations (create/update/delete) blocked from webhook-triggered runs, reads (list/search) allowed.
 - **Web Search**: Tavily API, key in JSON body. Requires `web_search` bucket with api_key credential.
