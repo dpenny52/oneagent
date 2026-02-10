@@ -40,6 +40,7 @@ export function PermissionsTab({
                   {name === "data_write" && "Allow writing/modifying external data"}
                   {name === "gmail" && "Allow reading emails from connected Gmail account"}
                   {name === "web_search" && "Allow searching the web for information (requires Tavily API key)"}
+                  {name === "google_calendar" && "Allow managing Google Calendar events (create, read, update, delete)"}
                 </p>
               </div>
               <button onClick={() => onToggleBucket(name)} style={{ width: 44, height: 24, borderRadius: 12, border: "none", background: active ? C.glow : "rgba(255,255,255,0.1)", cursor: "pointer", position: "relative", transition: "background 0.3s" }}>

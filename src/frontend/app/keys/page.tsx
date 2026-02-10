@@ -39,6 +39,10 @@ function KeysContent() {
   const [gmailConnecting, setGmailConnecting] = useState(false);
   const [gmailMsg, setGmailMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Google Calendar OAuth state
+  const [calendarConnecting, setCalendarConnecting] = useState(false);
+  const [calendarMsg, setCalendarMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -64,6 +68,15 @@ function KeysContent() {
       window.history.replaceState({}, "", "/keys");
     } else if (params.get("gmail_error")) {
       setGmailMsg({ type: "error", text: `Gmail connection failed: ${params.get("gmail_error")}` });
+      window.history.replaceState({}, "", "/keys");
+    }
+
+    if (params.get("calendar_connected") === "true") {
+      setCalendarMsg({ type: "success", text: "Google Calendar connected successfully!" });
+      api.get<Credential[]>("/api/credentials").then((r) => { if (r.ok) setCreds(r.data); });
+      window.history.replaceState({}, "", "/keys");
+    } else if (params.get("calendar_error")) {
+      setCalendarMsg({ type: "error", text: `Calendar connection failed: ${params.get("calendar_error")}` });
       window.history.replaceState({}, "", "/keys");
     }
   }, []);
@@ -166,6 +179,21 @@ function KeysContent() {
   }
 
   const gmailCred = creds.find((c) => c.service === "gmail");
+
+  /* ---- Google Calendar OAuth ---- */
+  async function handleConnectCalendar() {
+    setCalendarConnecting(true);
+    setCalendarMsg(null);
+    const res = await api.get<{ url: string }>("/api/auth/calendar");
+    if (res.ok && res.data.url) {
+      window.location.href = res.data.url;
+    } else {
+      setCalendarConnecting(false);
+      setCalendarMsg({ type: "error", text: res.ok ? "No OAuth URL returned" : (res as { error: string }).error || "Failed to start Calendar connection" });
+    }
+  }
+
+  const calendarCred = creds.find((c) => c.service === "google_calendar");
 
   const selectStyle: React.CSSProperties = { ...inputStyle(), appearance: "none" as const, cursor: "pointer" };
 
@@ -285,6 +313,36 @@ function KeysContent() {
                 </div>
                 <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleConnectGmail} disabled={gmailConnecting} style={{ padding: "0.6rem 1.2rem", borderRadius: 10, border: "none", background: gmailConnecting ? "rgba(255,255,255,0.1)" : `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: gmailConnecting ? C.muted : C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.85rem", fontWeight: 600, cursor: gmailConnecting ? "wait" : "pointer" }}>
                   {gmailConnecting ? "Connecting..." : gmailCred ? "Reconnect" : "Connect Gmail"}
+                </motion.button>
+              </div>
+            </section>
+
+            {/* ==================== Google Calendar Access ==================== */}
+            <section style={{ marginBottom: "3rem" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+                <div>
+                  <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.6rem", color: "#fff", fontWeight: 400, marginBottom: "0.2rem" }}>Google Calendar</h2>
+                  <p style={{ fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: "0.85rem", color: C.muted }}>Connect your Google Calendar to let agents manage your events</p>
+                </div>
+              </div>
+
+              {calendarMsg && (
+                <div style={{ padding: "0.7rem 1rem", borderRadius: 8, marginBottom: "1rem", background: calendarMsg.type === "success" ? "rgba(0,212,170,0.08)" : "rgba(255,107,107,0.08)", border: `1px solid ${calendarMsg.type === "success" ? C.glow + "30" : "rgba(255,107,107,0.2)"}`, fontSize: "0.85rem", color: calendarMsg.type === "success" ? C.glow : C.danger }}>
+                  {calendarMsg.text}
+                </div>
+              )}
+
+              <div style={{ ...glassCard(), padding: "1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                  <span style={{ padding: "0.2rem 0.6rem", borderRadius: 6, background: "rgba(66,133,244,0.08)", border: "1px solid rgba(66,133,244,0.3)", fontSize: "0.75rem", fontWeight: 500, color: "#4285F4", textTransform: "uppercase" }}>Calendar</span>
+                  {calendarCred ? (
+                    <span style={{ fontSize: "0.9rem", color: C.glow }}>Connected</span>
+                  ) : (
+                    <span style={{ fontSize: "0.9rem", color: C.muted }}>Not connected</span>
+                  )}
+                </div>
+                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleConnectCalendar} disabled={calendarConnecting} style={{ padding: "0.6rem 1.2rem", borderRadius: 10, border: "none", background: calendarConnecting ? "rgba(255,255,255,0.1)" : `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: calendarConnecting ? C.muted : C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.85rem", fontWeight: 600, cursor: calendarConnecting ? "wait" : "pointer" }}>
+                  {calendarConnecting ? "Connecting..." : calendarCred ? "Reconnect" : "Connect Calendar"}
                 </motion.button>
               </div>
             </section>

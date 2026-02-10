@@ -20,4 +20,5 @@ export const BUCKET_NAMES = [
   "data_write",
   "gmail",
   "web_search",
+  "google_calendar",
 ] as const;

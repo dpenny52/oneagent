@@ -71,6 +71,13 @@ defmodule OneAgentWeb.Router do
     get "/gmail/callback", GmailAuthController, :callback
   end
 
+  # Calendar OAuth callback (public — Google redirects here, rate limited)
+  scope "/api/auth", OneAgentWeb do
+    pipe_through [:api, :oauth_rate_limited]
+
+    get "/calendar/callback", CalendarAuthController, :callback
+  end
+
   # Authenticated routes
   scope "/api/auth", OneAgentWeb do
     pipe_through [:api, :require_authenticated_user]
@@ -79,6 +86,7 @@ defmodule OneAgentWeb.Router do
     get "/me", UserSessionController, :me
     put "/password", UserSessionController, :update_password
     get "/gmail", GmailAuthController, :authorize
+    get "/calendar", CalendarAuthController, :authorize
   end
 
   # Authenticated API routes (rate limited per user)

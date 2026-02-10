@@ -16,7 +16,7 @@ defmodule OneAgent.Agents.AgentBucket do
     timestamps(type: :utc_datetime)
   end
 
-  @valid_buckets ~w(web_access email spending communication data_write gmail web_search)
+  @valid_buckets ~w(web_access email spending communication data_write gmail web_search google_calendar)
 
   def valid_buckets, do: @valid_buckets
 

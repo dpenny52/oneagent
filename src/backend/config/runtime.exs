@@ -26,6 +26,13 @@ config :oneagent, :google_gmail_client_id,
 config :oneagent, :google_gmail_client_secret,
   System.get_env("GOOGLE_GMAIL_CLIENT_SECRET") || System.get_env("GOOGLE_CLIENT_SECRET")
 
+# Google Calendar OAuth credentials (falls back to Google OAuth credentials)
+config :oneagent, :google_calendar_client_id,
+  System.get_env("GOOGLE_CALENDAR_CLIENT_ID") || System.get_env("GOOGLE_CLIENT_ID")
+
+config :oneagent, :google_calendar_client_secret,
+  System.get_env("GOOGLE_CALENDAR_CLIENT_SECRET") || System.get_env("GOOGLE_CLIENT_SECRET")
+
 # Cloak encryption key (required in prod, optional in dev/test)
 if cloak_key = System.get_env("CLOAK_KEY") do
   config :oneagent, OneAgent.Vault,
