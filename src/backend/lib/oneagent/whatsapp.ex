@@ -67,6 +67,17 @@ defmodule OneAgent.WhatsApp do
     Repo.get_by(Channel, verify_token: verify_token)
   end
 
+  @doc """
+  Finds the first active channel for an agent (used by send_whatsapp tool).
+  Returns the channel or nil.
+  """
+  def get_active_channel_by_agent_id(agent_id) do
+    Channel
+    |> where(agent_id: ^agent_id, active: true)
+    |> limit(1)
+    |> Repo.one()
+  end
+
   # ── Ownership validation ───────────────────────────────────
 
   defp validate_ownership(user, attrs, scope \\ nil, channel \\ nil) do

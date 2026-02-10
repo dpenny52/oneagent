@@ -138,6 +138,25 @@ defmodule OneAgent.WhatsAppTest do
     end
   end
 
+  describe "get_active_channel_by_agent_id/1" do
+    test "returns active channel for agent", %{scope: scope} do
+      channel = channel_fixture(scope)
+      found = WhatsApp.get_active_channel_by_agent_id(channel.agent_id)
+      assert found != nil
+      assert found.id == channel.id
+    end
+
+    test "returns nil for inactive channel", %{scope: scope} do
+      channel = channel_fixture(scope)
+      {:ok, _} = WhatsApp.update_channel(scope, channel, %{"active" => false})
+      assert nil == WhatsApp.get_active_channel_by_agent_id(channel.agent_id)
+    end
+
+    test "returns nil for unknown agent_id" do
+      assert nil == WhatsApp.get_active_channel_by_agent_id(Ecto.UUID.generate())
+    end
+  end
+
   describe "get_channel_by_verify_token/1" do
     test "returns channel matching token", %{scope: scope} do
       channel = channel_fixture(scope)

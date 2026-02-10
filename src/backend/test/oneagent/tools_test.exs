@@ -15,7 +15,7 @@ defmodule OneAgent.ToolsTest do
   describe "all_tools/0" do
     test "returns all registered tools" do
       tools = Tools.all_tools()
-      assert length(tools) == 12
+      assert length(tools) == 14
 
       ids = Enum.map(tools, & &1.id())
       assert "http_request" in ids
@@ -30,6 +30,7 @@ defmodule OneAgent.ToolsTest do
       assert "manage_goal" in ids
       assert "manage_goal_step" in ids
       assert "list_goals" in ids
+      assert "send_whatsapp" in ids
     end
   end
 
@@ -149,6 +150,25 @@ defmodule OneAgent.ToolsTest do
       names = Enum.map(defs, & &1["name"])
 
       refute "web_search" in names
+    end
+
+    test "includes send_whatsapp when whatsapp bucket is granted", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "whatsapp"})
+
+      defs = Tools.tool_definitions_for_agent(agent)
+      names = Enum.map(defs, & &1["name"])
+
+      assert "send_whatsapp" in names
+    end
+
+    test "excludes send_whatsapp when whatsapp bucket not granted", %{scope: scope} do
+      agent = agent_fixture(scope)
+
+      defs = Tools.tool_definitions_for_agent(agent)
+      names = Enum.map(defs, & &1["name"])
+
+      refute "send_whatsapp" in names
     end
   end
 
@@ -992,6 +1012,19 @@ defmodule OneAgent.ToolsTest do
       assert msg =~ "not available during webhook-triggered runs"
     end
 
+    test "blocks send_whatsapp from webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "whatsapp"})
+      context = %{agent: agent, trigger: "webhook"}
+
+      assert {:error, msg} = Tools.execute_tool("send_whatsapp", %{
+        "to" => "15551234567",
+        "message" => "Injected message"
+      }, context)
+
+      assert msg =~ "not available during webhook-triggered runs"
+    end
+
     test "blocks store_memory from webhook trigger", %{scope: scope} do
       agent = agent_fixture(scope)
       context = %{agent: agent, run: nil, trigger: "webhook"}
@@ -1068,6 +1101,16 @@ defmodule OneAgent.ToolsTest do
   end
 
   describe "tool_definitions_for_agent/2 webhook filtering" do
+    test "excludes send_whatsapp from tool definitions for webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "whatsapp"})
+
+      defs = Tools.tool_definitions_for_agent(agent, "webhook")
+      names = Enum.map(defs, & &1["name"])
+
+      refute "send_whatsapp" in names
+    end
+
     test "excludes store_memory from tool definitions for webhook trigger", %{scope: scope} do
       agent = agent_fixture(scope)
 
