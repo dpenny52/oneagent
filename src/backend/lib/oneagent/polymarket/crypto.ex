@@ -31,8 +31,11 @@ defmodule OneAgent.Polymarket.Crypto do
   Creates an HMAC-SHA256 signature for Polymarket CLOB API authentication.
   """
   def hmac_signature(secret, timestamp, method, path, body \\ "") do
-    message = "#{timestamp}\n#{String.upcase(method)}\n#{path}\n#{body}"
-    :crypto.mac(:hmac, :sha256, secret, message) |> Base.encode64()
+    # Official client: direct concatenation, no separators
+    message = "#{timestamp}#{String.upcase(method)}#{path}#{body}"
+
+    :crypto.mac(:hmac, :sha256, secret, message)
+    |> Base.url_encode64()
   end
 
   @doc """
@@ -65,9 +68,9 @@ defmodule OneAgent.Polymarket.Crypto do
   Signs a CLOB API authentication message.
   Returns {:ok, %{signature: "0x...", timestamp: ts, nonce: nonce}} or error.
   """
-  def sign_clob_auth(private_key_hex) do
-    timestamp = System.system_time(:millisecond)
-    nonce = :crypto.strong_rand_bytes(16) |> :binary.decode_unsigned()
+  def sign_clob_auth(private_key_hex, nonce \\ 0) do
+    # Timestamp must be in SECONDS (not milliseconds) per official Polymarket client
+    timestamp = System.system_time(:second)
 
     domain = %{
       "name" => "ClobAuthDomain",

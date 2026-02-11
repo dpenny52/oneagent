@@ -136,10 +136,12 @@ defmodule OneAgent.Polymarket.Client do
       {"POLY_API_KEY", api_creds["apiKey"]},
       {"POLY_PASSPHRASE", api_creds["passphrase"]},
       {"POLY_TIMESTAMP", timestamp},
-      {"POLY_SIGNATURE", hmac}
+      {"POLY_SIGNATURE", hmac},
+      {"content-type", "application/json"}
     ]
 
-    case Req.post(url, json: body, headers: headers, receive_timeout: @request_timeout) do
+    # Send pre-encoded JSON to ensure HMAC matches the exact body bytes
+    case Req.post(url, body: body_json, headers: headers, receive_timeout: @request_timeout) do
       {:ok, %{status: status, body: resp}} when status in 200..299 -> {:ok, resp}
       {:ok, %{status: status, body: resp}} -> {:error, "HTTP #{status}: #{sanitize_error(resp)}"}
       {:error, exception} -> {:error, "Request failed: #{Exception.message(exception)}"}

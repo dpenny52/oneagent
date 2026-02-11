@@ -27,10 +27,10 @@ defmodule OneAgent.Polymarket.CryptoTest do
   end
 
   describe "hmac_signature/5" do
-    test "produces base64 encoded HMAC" do
+    test "produces base64url encoded HMAC" do
       result = Crypto.hmac_signature("secret", "12345", "GET", "/api/test")
       assert is_binary(result)
-      assert {:ok, _} = Base.decode64(result)
+      assert {:ok, _} = Base.url_decode64(result)
     end
 
     test "different inputs produce different signatures" do
