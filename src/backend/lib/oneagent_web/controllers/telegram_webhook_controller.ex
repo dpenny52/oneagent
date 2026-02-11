@@ -63,7 +63,7 @@ defmodule OneAgentWeb.TelegramWebhookController do
     # Build scope from channel owner and invoke agent
     scope = Scope.for_user(channel.user)
 
-    case invoke_agent(scope, channel.agent, text, %{trusted_sender: trusted}) do
+    case invoke_agent(scope, channel.agent, text, %{trusted_sender: trusted, channel: "telegram"}) do
       {:ok, response} ->
         Client.send_message(bot_token, chat_id, response)
 

@@ -128,7 +128,7 @@ defmodule OneAgentWeb.WhatsAppWebhookController do
   defp parse_credential(_), do: {:error, :invalid_credential}
 
   defp invoke_agent(scope, agent, text) do
-    case OneAgent.Runtime.invoke_agent(scope, agent.id, text, "webhook") do
+    case OneAgent.Runtime.invoke_agent(scope, agent.id, text, "webhook", %{channel: "whatsapp"}) do
       {:ok, %{response: response}} -> {:ok, response}
       {:error, reason} -> {:error, reason}
     end

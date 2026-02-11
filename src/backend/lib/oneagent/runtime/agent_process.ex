@@ -70,7 +70,7 @@ defmodule OneAgent.Runtime.AgentProcess do
 
   defp do_run(state, message, trigger, opts) do
     agent = state.agent
-    source = trigger_to_source(trigger)
+    source = derive_source(trigger, opts)
     deadline = System.monotonic_time(:millisecond) + max_run_duration_ms()
 
     # Create run record
@@ -78,11 +78,13 @@ defmodule OneAgent.Runtime.AgentProcess do
     {:ok, run} = Agents.start_run(run)
 
     # Load conversation history and append current user message
+    # Prefix user messages with their channel source so the LLM knows the origin
     history = Agents.list_recent_messages(agent)
     history_messages = Enum.map(history, fn msg ->
-      %{"role" => msg.role, "content" => msg.content}
+      content = if msg.role == "user", do: source_label(msg.source) <> msg.content, else: msg.content
+      %{"role" => msg.role, "content" => content}
     end)
-    messages = history_messages ++ [%{"role" => "user", "content" => message}]
+    messages = history_messages ++ [%{"role" => "user", "content" => source_label(source) <> message}]
 
     # Get tool definitions filtered by agent's buckets (and trigger source)
     tool_defs = Tools.tool_definitions_for_agent(agent, trigger, opts)
@@ -384,6 +386,11 @@ defmodule OneAgent.Runtime.AgentProcess do
 
     context_section = """
 
+    ## Message Channels
+    - Each user message is prefixed with its source channel (e.g., [via Telegram], [via WhatsApp], [via Web Chat]).
+    - Be aware of which channel you're responding on. Keep messages concise on chat apps (Telegram, WhatsApp).
+    - When a user switches channels, don't be confused — it's the same person reaching you from a different app.
+
     ## How Your Memory Works
     - Your conversation history (the last #{agent.max_history_messages} messages) is included in this conversation. \
     For recent questions like "what did I just ask?", refer to the messages above — do NOT use recall_memory for that.
@@ -437,6 +444,18 @@ defmodule OneAgent.Runtime.AgentProcess do
   defp trigger_to_source("webhook"), do: "webhook"
   defp trigger_to_source("scheduled"), do: "scheduled"
   defp trigger_to_source(_), do: "chat"
+
+  # Derive a channel-specific source when available, otherwise fall back to trigger
+  defp derive_source(trigger, %{channel: channel}) when channel in ~w(telegram whatsapp), do: channel
+  defp derive_source(trigger, _opts), do: trigger_to_source(trigger)
+
+  # Labels prepended to user messages so the LLM knows which channel they came from
+  defp source_label("telegram"), do: "[via Telegram] "
+  defp source_label("whatsapp"), do: "[via WhatsApp] "
+  defp source_label("webhook"), do: "[via Webhook] "
+  defp source_label("scheduled"), do: "[via Scheduled Run] "
+  defp source_label("chat"), do: "[via Web Chat] "
+  defp source_label(_), do: ""
 
   defp resolve_api_key(agent) do
     case agent.llm_config do
