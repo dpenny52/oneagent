@@ -87,9 +87,15 @@ defmodule OneAgent.Tools.PolymarketMarkets do
     if !is_binary(query) or String.trim(query) == "" do
       {:error, "Missing required parameter: query (search text)"}
     else
-      case Client.list_events(%{tag: query, limit: 10, active: true}) do
-        {:ok, events} -> {:ok, %{"events" => format_events(events), "query" => query}}
-        {:error, reason} -> {:error, "Failed to search markets: #{reason}"}
+      case Client.search(query) do
+        {:ok, %{"events" => events}} when is_list(events) ->
+          {:ok, %{"events" => format_search_events(events), "query" => query}}
+
+        {:ok, _} ->
+          {:ok, %{"events" => [], "query" => query}}
+
+        {:error, reason} ->
+          {:error, "Failed to search markets: #{reason}"}
       end
     end
   end
@@ -148,19 +154,33 @@ defmodule OneAgent.Tools.PolymarketMarkets do
     end
   end
 
-  defp format_events(events) when is_list(events) do
+  # /public-search returns camelCase fields (conditionId vs condition_id)
+  defp format_search_events(events) when is_list(events) do
     Enum.map(events, fn e ->
+      markets =
+        (e["markets"] || [])
+        |> Enum.take(5)
+        |> Enum.map(fn m ->
+          %{
+            "condition_id" => m["conditionId"] || m["condition_id"],
+            "question" => m["question"],
+            "outcomes" => m["outcomes"],
+            "tokens" => m["clobTokenIds"],
+            "outcome_prices" => m["outcomePrices"]
+          }
+        end)
+
       %{
         "id" => e["id"],
         "title" => e["title"],
         "description" => truncate(e["description"], 200),
         "active" => e["active"],
-        "markets_count" => length(e["markets"] || [])
+        "markets" => markets
       }
     end)
   end
 
-  defp format_events(_), do: []
+  defp format_search_events(_), do: []
 
   defp format_event_detail(event) do
     markets =

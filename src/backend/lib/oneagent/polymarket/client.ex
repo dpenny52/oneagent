@@ -19,6 +19,11 @@ defmodule OneAgent.Polymarket.Client do
     get(gamma_base() <> "/events", params)
   end
 
+  def search(query, params \\ %{}) do
+    defaults = %{q: query, limit_per_type: 10, events_status: "active"}
+    get(gamma_base() <> "/public-search", Map.merge(defaults, params))
+  end
+
   def get_event(event_id) do
     get(gamma_base() <> "/events/#{event_id}")
   end
