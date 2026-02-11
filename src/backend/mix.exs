@@ -59,7 +59,9 @@ defmodule OneAgent.MixProject do
       {:hammer, "~> 6.2"},
       {:cloak_ecto, "~> 1.3"},
       {:oban, "~> 2.18"},
-      {:crontab, "~> 1.1"}
+      {:crontab, "~> 1.1"},
+      {:ex_keccak, "~> 0.7"},
+      {:ex_secp256k1, "~> 0.7"}
     ]
   end
 

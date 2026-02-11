@@ -43,6 +43,7 @@ export function PermissionsTab({
                   {name === "google_calendar" && "Allow managing Google Calendar events (create, read, update, delete)"}
                   {name === "whatsapp" && "Allow sending WhatsApp messages to phone numbers"}
                   {name === "telegram" && "Allow sending Telegram messages via bot"}
+                  {name === "polymarket" && "Allow trading on Polymarket prediction markets (buy/sell outcome tokens)"}
                 </p>
               </div>
               <button onClick={() => onToggleBucket(name)} style={{ width: 44, height: 24, borderRadius: 12, border: "none", background: active ? C.glow : "rgba(255,255,255,0.1)", cursor: "pointer", position: "relative", transition: "background 0.3s" }}>

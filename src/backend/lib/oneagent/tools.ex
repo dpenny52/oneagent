@@ -23,7 +23,10 @@ defmodule OneAgent.Tools do
     OneAgent.Tools.ManageSchedule,
     OneAgent.Tools.ManageGoal,
     OneAgent.Tools.ManageGoalStep,
-    OneAgent.Tools.ListGoals
+    OneAgent.Tools.ListGoals,
+    OneAgent.Tools.PolymarketMarkets,
+    OneAgent.Tools.PolymarketTrade,
+    OneAgent.Tools.PolymarketPortfolio
   ]
 
   # Actions restricted for webhook-triggered runs to mitigate prompt injection.
@@ -36,7 +39,9 @@ defmodule OneAgent.Tools do
     "manage_calendar" => MapSet.new(["create_event", "update_event", "delete_event"]),
     "send_whatsapp" => :all,
     "send_telegram" => :all,
-    "store_memory" => :all
+    "store_memory" => :all,
+    "polymarket_trade" => :all,
+    "polymarket_portfolio" => :all
   }
 
   @doc """

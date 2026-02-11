@@ -92,7 +92,7 @@ PostgreSQL must be running. Dev config uses `dpenny` user with no password. See 
 - **Auth**: Bearer token (API tokens stored SHA-256 hashed), rate limiting via Hammer
 - **Scheduling**: Oban with `ScheduleChecker` (every minute) + `ScheduledExecution` workers
 
-### Agent Tools (15 total)
+### Agent Tools (18 total)
 
 Tools registered in `OneAgent.Tools`, filtered by agent's active permission buckets. `nil` bucket = always available.
 
@@ -106,6 +106,9 @@ Tools registered in `OneAgent.Tools`, filtered by agent's active permission buck
 | `send_whatsapp` | whatsapp | Send outbound WhatsApp messages via Cloud API |
 | `send_telegram` | telegram | Send outbound Telegram messages via Bot API |
 | `web_search` | web_search | Search web via Tavily API |
+| `polymarket_markets` | polymarket | Browse/search markets, get prices/orderbooks |
+| `polymarket_trade` | polymarket | Buy/sell/cancel orders (webhook-restricted) |
+| `polymarket_portfolio` | polymarket | Positions, trades, portfolio value (webhook-restricted) |
 | `store_memory` | nil | Persist key-value memories |
 | `recall_memory` | nil | Recall by key, FTS search, or list all |
 | `list_schedules` | nil | List cron schedules |
@@ -121,6 +124,7 @@ Tools registered in `OneAgent.Tools`, filtered by agent's active permission buck
 - **Gmail**: OAuth2 flow (`GET /api/auth/gmail` → Google → callback → store refresh_token). `check_email` tool refreshes token on each use.
 - **Google Calendar**: OAuth2 flow (`GET /api/auth/calendar` → Google → callback → store refresh_token). `manage_calendar` tool supports list/create/update/delete/search events. Uses `calendar.events` scope. Webhook-restricted: mutations (create/update/delete) blocked from webhook-triggered runs, reads (list/search) allowed.
 - **Web Search**: Tavily API, key in JSON body. Requires `web_search` bucket with api_key credential.
+- **Polymarket**: Prediction market trading on Polygon. 3 APIs: Gamma (public market data), CLOB (authenticated trading via EIP-712 + HMAC-SHA256), Data (portfolio by wallet address). Custom JSON credential `{"private_key": "0x..."}` — wallet address derived at runtime. NIF deps: `ex_keccak` + `ex_secp256k1`. Both `polymarket_trade` and `polymarket_portfolio` are fully webhook-restricted. Shared credential parsing in `OneAgent.Polymarket.Credentials`. Crypto in `OneAgent.Polymarket.Crypto`. HTTP client in `OneAgent.Polymarket.Client`.
 - **Goals**: Auto-create hourly review schedule. Steps can have linked cron schedules. Complete/abandon disables all associated schedules.
 
 ---
