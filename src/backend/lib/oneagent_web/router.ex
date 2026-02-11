@@ -9,7 +9,7 @@ defmodule OneAgentWeb.Router do
   end
 
   pipeline :rate_limited do
-    plug OneAgentWeb.Plugs.RateLimit, max_requests: 5, interval_ms: 60_000
+    plug OneAgentWeb.Plugs.RateLimit, max_requests: 60, interval_ms: 60_000
   end
 
   pipeline :webhook do
@@ -26,10 +26,10 @@ defmodule OneAgentWeb.Router do
       bucket_prefix: "api"
   end
 
-  # Stricter per-user rate limit on agent invoke (10 req/min)
+  # Per-user rate limit on agent invoke (60 req/min)
   pipeline :invoke_rate_limited do
     plug OneAgentWeb.Plugs.RateLimit,
-      max_requests: 10,
+      max_requests: 60,
       interval_ms: 60_000,
       by: :user,
       bucket_prefix: "invoke"
@@ -48,10 +48,10 @@ defmodule OneAgentWeb.Router do
     post "/confirm/:token", UserConfirmationController, :confirm
   end
 
-  # Rate limit for OAuth callback routes (10 req/min per IP)
+  # Rate limit for OAuth callback routes (60 req/min per IP)
   pipeline :oauth_rate_limited do
     plug OneAgentWeb.Plugs.RateLimit,
-      max_requests: 10,
+      max_requests: 60,
       interval_ms: 60_000,
       bucket_prefix: "oauth"
   end
