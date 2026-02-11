@@ -17,6 +17,7 @@ defmodule OneAgent.Application do
       {Registry, keys: :unique, name: OneAgent.Runtime.AgentRegistry},
       OneAgent.Runtime.AgentSupervisor,
       {Task.Supervisor, name: OneAgent.WhatsApp.TaskSupervisor},
+      {Task.Supervisor, name: OneAgent.Telegram.TaskSupervisor},
       {Oban, Application.fetch_env!(:oneagent, Oban)},
       # Start to serve requests, typically the last entry
       OneAgentWeb.Endpoint

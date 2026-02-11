@@ -18,6 +18,7 @@ Agents operate within permission buckets that control which tools they can use. 
 | `spending` | — | Reserved for financial transaction tools |
 | `web_search` | `web_search` | Search the web via Tavily API |
 | `whatsapp` | `send_whatsapp` | Send outbound WhatsApp messages via Cloud API |
+| `telegram` | `send_telegram` | Send outbound Telegram messages via Bot API |
 | `communication` | — | Reserved for messaging tools (Slack, etc.) |
 | `data_write` | — | Allow writing/modifying external data |
 | *(always available)* | `store_memory` | Persist key-value data across conversations |
@@ -33,6 +34,7 @@ Agents operate within permission buckets that control which tools they can use. 
 - **Gmail** — OAuth2 flow via `/keys` page. User connects their Google account, agent gets read-only access to their inbox via the `check_email` tool.
 - **Google Calendar** — OAuth2 flow via `/keys` page. User connects their Google Calendar, agent gets full event management (list, create, update, delete, search) via the `manage_calendar` tool.
 - **WhatsApp** — Agents receive and reply to WhatsApp messages via Meta's Cloud API, and can proactively send outbound messages via the `send_whatsapp` tool (e.g., from scheduled tasks). Configure a channel linking a phone number to an agent.
+- **Telegram** — Agents receive and reply to Telegram messages via the Bot API. Simpler than WhatsApp: single bot token credential, header-based webhook verification, auto-registerable webhooks. Configure a channel linking a bot to an agent.
 - **Cron Schedules** — Agents can have multiple cron schedules that fire automatically. Agents can also manage their own schedules via tools.
 
 ## Quick Start (Docker)
@@ -147,19 +149,22 @@ npm run lint       # ESLint
 | `CRUD` | `/api/credentials` | Encrypted credential storage |
 | `CRUD` | `/api/llm-configs` | LLM API key management |
 | `CRUD` | `/api/whatsapp-channels` | WhatsApp channel config |
+| `CRUD` | `/api/telegram-channels` | Telegram channel config |
 | `GET` | `/api/webhooks/whatsapp` | Meta webhook verification |
 | `POST` | `/api/webhooks/whatsapp` | Incoming WhatsApp messages |
+| `POST` | `/api/webhooks/telegram/:bot_id` | Incoming Telegram messages |
 
-All agent/credential/channel routes require Bearer auth. Webhook routes are unauthenticated (verified via HMAC-SHA256) and rate-limited to 60 req/min.
+All agent/credential/channel routes require Bearer auth. Webhook routes are unauthenticated (verified via header token or HMAC-SHA256) and rate-limited to 60 req/min.
 
 ### Key Features
 
 - **Chat History** — Conversation messages persist across runs in `agent_messages`. Agents recall prior context (configurable limit via `max_history_messages`, default 20). View with `GET /api/agents/:id/messages`, clear with `DELETE`.
 - **Scheduled Execution** — Agents support multiple cron schedules that fire automatically via Oban. A sweeper checks every minute and enqueues per-schedule execution jobs with deduplication. Agents can also manage their own schedules via tools.
-- **Permission Buckets** — Agents operate within granted permission buckets (web_access, email, spending, communication, data_write, gmail, web_search, google_calendar, whatsapp) that control which tools they can use.
+- **Permission Buckets** — Agents operate within granted permission buckets (web_access, email, spending, communication, data_write, gmail, web_search, google_calendar, whatsapp, telegram) that control which tools they can use.
 - **Gmail Integration** — OAuth2 flow connects a user's Gmail account. Agents with the `gmail` bucket can list, search, and read emails.
 - **Google Calendar Integration** — OAuth2 flow connects a user's Google Calendar. Agents with the `google_calendar` bucket can list, create, update, delete, and search calendar events.
 - **Persistent Memory** — Agents can store and recall key-value memories across conversations via the `store_memory` and `recall_memory` tools. Memories support full-text search and are scoped per agent.
+- **Telegram Integration** — Bot API integration connects a Telegram bot to an agent. Simpler than WhatsApp: single bot token credential, header-based webhook verification, auto-registerable webhooks. Agents can send outbound messages via the `send_telegram` tool.
 - **Goals** — Agents can create and track goals with discrete steps. Each goal automatically gets an hourly review schedule, and individual steps can have their own cron schedules. Goals can be paused, resumed, completed, or abandoned.
 - **User Isolation** — All agent/credential/channel queries are scoped to the authenticated user. Users can only see and manage their own resources.
 
@@ -299,6 +304,40 @@ Google Calendar credentials are created automatically via the OAuth flow — sam
 6. Grant the `google_calendar` permission bucket to your agent and assign the Google Calendar credential
 
 The agent can then use the `manage_calendar` tool to list, create, update, delete, and search calendar events.
+
+### 6. Telegram Bot
+
+Stored in the `credentials` table as a plain API key. Required for Telegram integration.
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) on Telegram and copy the bot token
+2. Add the bot token as a credential:
+
+```bash
+curl -X POST http://localhost:4000/api/credentials \
+  -H 'Authorization: Bearer $TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"credential": {
+    "name": "My Telegram Bot",
+    "service": "telegram",
+    "credential_type": "api_key",
+    "value": "123456:AAF..."
+  }}'
+```
+
+3. Create a Telegram channel linking the bot to an agent:
+
+```bash
+curl -X POST http://localhost:4000/api/telegram-channels \
+  -H 'Authorization: Bearer $TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"channel": {
+    "agent_id": "...",
+    "credential_id": "...",
+    "bot_username": "@my_bot"
+  }}'
+```
+
+The response includes a `secret_token` (only shown once) and `webhook_registered` status. The webhook is automatically registered with Telegram on channel creation. For local development, set `WEBHOOK_BASE_URL` or use [ngrok](https://ngrok.com) to expose `localhost:4000`.
 
 ## License
 

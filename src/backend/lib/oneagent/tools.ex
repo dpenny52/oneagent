@@ -15,6 +15,7 @@ defmodule OneAgent.Tools do
     OneAgent.Tools.CheckEmail,
     OneAgent.Tools.ManageCalendar,
     OneAgent.Tools.SendWhatsApp,
+    OneAgent.Tools.SendTelegram,
     OneAgent.Tools.WebSearch,
     OneAgent.Tools.StoreMemory,
     OneAgent.Tools.RecallMemory,
@@ -34,6 +35,7 @@ defmodule OneAgent.Tools do
     "manage_goal_step" => MapSet.new(["remove", "skip", "complete", "add", "add_schedule", "remove_schedule"]),
     "manage_calendar" => MapSet.new(["create_event", "update_event", "delete_event"]),
     "send_whatsapp" => :all,
+    "send_telegram" => :all,
     "store_memory" => :all
   }
 

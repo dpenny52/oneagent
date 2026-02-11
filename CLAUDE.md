@@ -84,7 +84,7 @@ PostgreSQL must be running. Dev config uses `dpenny` user with no password. See 
 
 ### Architecture Overview
 
-- **11 tables**: agents, credentials, llm_configs, agent_buckets, agent_runs, agent_steps, agent_memories, agent_messages, agent_schedules, agent_goals, agent_goal_steps
+- **12 tables**: agents, credentials, llm_configs, agent_buckets, agent_runs, agent_steps, agent_memories, agent_messages, agent_schedules, agent_goals, agent_goal_steps, telegram_channels
 - **Contexts**: `Agents` (CRUD + all agent-related data), `Credentials` (encrypted creds + LLM configs)
 - **Runtime**: DynamicSupervisor + GenServer per agent, Registry for lookup. Processes auto-start on invoke.
 - **LLM providers**: Anthropic + OpenAI via Req (behaviour pattern in `OneAgent.LLM`)
@@ -92,7 +92,7 @@ PostgreSQL must be running. Dev config uses `dpenny` user with no password. See 
 - **Auth**: Bearer token (API tokens stored SHA-256 hashed), rate limiting via Hammer
 - **Scheduling**: Oban with `ScheduleChecker` (every minute) + `ScheduledExecution` workers
 
-### Agent Tools (14 total)
+### Agent Tools (15 total)
 
 Tools registered in `OneAgent.Tools`, filtered by agent's active permission buckets. `nil` bucket = always available.
 
@@ -104,6 +104,7 @@ Tools registered in `OneAgent.Tools`, filtered by agent's active permission buck
 | `check_email` | gmail | Read Gmail via OAuth2 (list/read actions) |
 | `manage_calendar` | google_calendar | CRUD Google Calendar events via OAuth2 (list/create/update/delete/search) |
 | `send_whatsapp` | whatsapp | Send outbound WhatsApp messages via Cloud API |
+| `send_telegram` | telegram | Send outbound Telegram messages via Bot API |
 | `web_search` | web_search | Search web via Tavily API |
 | `store_memory` | nil | Persist key-value memories |
 | `recall_memory` | nil | Recall by key, FTS search, or list all |
@@ -116,6 +117,7 @@ Tools registered in `OneAgent.Tools`, filtered by agent's active permission buck
 ### Key Integrations
 
 - **WhatsApp**: `whatsapp_channels` maps phone_number_id → agent + credential. Webhook is async (returns 200, processes via TaskSupervisor). HMAC-SHA256 verification via `CacheRawBody` plug. `send_whatsapp` tool enables proactive outbound messages (webhook-restricted to prevent prompt injection).
+- **Telegram**: `telegram_channels` maps bot_id → agent + credential. Simpler than WhatsApp: single bot token credential (`api_key` type), header-based webhook verification (`X-Telegram-Bot-Api-Secret-Token`), auto-registerable webhooks via `setWebhook` API. `send_telegram` tool enables proactive outbound messages (webhook-restricted).
 - **Gmail**: OAuth2 flow (`GET /api/auth/gmail` → Google → callback → store refresh_token). `check_email` tool refreshes token on each use.
 - **Google Calendar**: OAuth2 flow (`GET /api/auth/calendar` → Google → callback → store refresh_token). `manage_calendar` tool supports list/create/update/delete/search events. Uses `calendar.events` scope. Webhook-restricted: mutations (create/update/delete) blocked from webhook-triggered runs, reads (list/search) allowed.
 - **Web Search**: Tavily API, key in JSON body. Requires `web_search` bucket with api_key credential.

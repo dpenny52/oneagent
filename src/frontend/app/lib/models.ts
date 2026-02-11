@@ -22,4 +22,5 @@ export const BUCKET_NAMES = [
   "web_search",
   "google_calendar",
   "whatsapp",
+  "telegram",
 ] as const;

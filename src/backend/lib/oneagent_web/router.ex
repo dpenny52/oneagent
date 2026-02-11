@@ -112,6 +112,7 @@ defmodule OneAgentWeb.Router do
     resources "/credentials", CredentialController, except: [:new, :edit]
     resources "/llm-configs", LlmConfigController, except: [:new, :edit]
     resources "/whatsapp-channels", WhatsAppChannelController, except: [:new, :edit]
+    resources "/telegram-channels", TelegramChannelController, except: [:new, :edit]
   end
 
   # Agent invoke — stricter per-user rate limit (10 req/min)
@@ -127,6 +128,13 @@ defmodule OneAgentWeb.Router do
 
     get "/whatsapp", WhatsAppWebhookController, :verify
     post "/whatsapp", WhatsAppWebhookController, :handle
+  end
+
+  # Telegram webhook (unauthenticated, rate limited)
+  scope "/api/webhooks", OneAgentWeb do
+    pipe_through [:webhook]
+
+    post "/telegram/:bot_id", TelegramWebhookController, :handle
   end
 
   # Health check

@@ -15,7 +15,7 @@ defmodule OneAgent.ToolsTest do
   describe "all_tools/0" do
     test "returns all registered tools" do
       tools = Tools.all_tools()
-      assert length(tools) == 14
+      assert length(tools) == 15
 
       ids = Enum.map(tools, & &1.id())
       assert "http_request" in ids
@@ -31,6 +31,7 @@ defmodule OneAgent.ToolsTest do
       assert "manage_goal_step" in ids
       assert "list_goals" in ids
       assert "send_whatsapp" in ids
+      assert "send_telegram" in ids
     end
   end
 
