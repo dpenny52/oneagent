@@ -48,18 +48,22 @@ defmodule OneAgent.Tools do
   Returns tool definitions for the LLM, filtered to only tools
   in the agent's approved buckets. Memory tools always included.
 
-  When `trigger` is `"webhook"`, management tools (schedule, goal, memory)
-  are excluded to prevent prompt injection via external messages.
+  When `trigger` is `"webhook"` and the sender is not trusted,
+  management tools (schedule, goal, memory) are excluded to
+  prevent prompt injection via external messages. Trusted senders
+  (channel owners) bypass these restrictions.
   """
-  def tool_definitions_for_agent(agent, trigger \\ "manual") do
+  def tool_definitions_for_agent(agent, trigger \\ "manual", opts \\ %{}) do
     active_buckets =
       Agents.list_active_buckets(agent)
       |> Enum.map(& &1.bucket)
       |> MapSet.new()
 
+    trusted = Map.get(opts, :trusted_sender, false)
+
     # Tools fully restricted for webhook triggers (all actions blocked)
     webhook_excluded_tools =
-      if trigger == "webhook" do
+      if trigger == "webhook" and not trusted do
         @webhook_restricted_actions
         |> Enum.filter(fn {_id, restriction} -> restriction == :all end)
         |> Enum.map(fn {id, _} -> id end)
@@ -132,8 +136,9 @@ defmodule OneAgent.Tools do
 
   defp webhook_restricted?(tool_id, input, context) do
     trigger = Map.get(context, :trigger)
+    trusted = Map.get(context, :trusted_sender, false)
 
-    trigger == "webhook" and
+    trigger == "webhook" and not trusted and
       case Map.get(@webhook_restricted_actions, tool_id) do
         nil -> false
         :all -> true

@@ -22,6 +22,7 @@ defmodule OneAgentWeb.TelegramChannelJSON do
       bot_username: channel.bot_username,
       active: channel.active,
       webhook_registered: channel.webhook_registered,
+      owner_chat_id: channel.owner_chat_id,
       inserted_at: channel.inserted_at,
       updated_at: channel.updated_at
     }

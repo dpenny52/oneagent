@@ -1099,6 +1099,80 @@ defmodule OneAgent.ToolsTest do
         "memory_type" => "fact"
       }, context)
     end
+
+    test "trusted sender bypasses manage_schedule create restriction on webhook", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "webhook", trusted_sender: true}
+
+      assert {:ok, result} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "cron" => "*/5 * * * *",
+        "message" => "Trusted schedule"
+      }, context)
+
+      assert result["action"] == "created"
+    end
+
+    test "trusted sender bypasses store_memory restriction on webhook", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, run: nil, trigger: "webhook", trusted_sender: true}
+
+      assert {:ok, %{"stored" => true}} = Tools.execute_tool("store_memory", %{
+        "key" => "trusted_key",
+        "value" => %{"data" => "trusted_value"},
+        "memory_type" => "fact"
+      }, context)
+    end
+
+    test "trusted sender bypasses send_telegram restriction on webhook", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "telegram"})
+      context = %{agent: agent, trigger: "webhook", trusted_sender: true}
+
+      # Will fail at credential lookup, but should NOT fail at webhook restriction
+      result = Tools.execute_tool("send_telegram", %{
+        "chat_id" => "12345",
+        "message" => "Trusted message"
+      }, context)
+
+      # Should get past the webhook restriction check — credential error is expected
+      case result do
+        {:error, msg} -> refute msg =~ "not available during webhook-triggered runs"
+        {:ok, _} -> :ok
+      end
+    end
+
+    test "trusted sender bypasses manage_calendar create restriction on webhook", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "google_calendar"})
+      context = %{agent: agent, trigger: "webhook", trusted_sender: true}
+
+      # Will fail at credential lookup, not at webhook restriction
+      result = Tools.execute_tool("manage_calendar", %{
+        "action" => "create_event",
+        "title" => "Test Event",
+        "start_time" => "2026-03-01T10:00:00Z",
+        "end_time" => "2026-03-01T11:00:00Z"
+      }, context)
+
+      case result do
+        {:error, msg} -> refute msg =~ "not available during webhook-triggered runs"
+        {:ok, _} -> :ok
+      end
+    end
+
+    test "untrusted webhook still blocks when trusted_sender is false", %{scope: scope} do
+      agent = agent_fixture(scope)
+      context = %{agent: agent, trigger: "webhook", trusted_sender: false}
+
+      assert {:error, msg} = Tools.execute_tool("manage_schedule", %{
+        "action" => "create",
+        "cron" => "*/5 * * * *",
+        "message" => "Untrusted schedule"
+      }, context)
+
+      assert msg =~ "not available during webhook-triggered runs"
+    end
   end
 
   describe "tool_definitions_for_agent/2 webhook filtering" do
@@ -1147,6 +1221,35 @@ defmodule OneAgent.ToolsTest do
 
       assert "store_memory" in names
       assert "recall_memory" in names
+    end
+
+    test "trusted sender gets all tools including send_whatsapp for webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "whatsapp"})
+
+      defs = Tools.tool_definitions_for_agent(agent, "webhook", %{trusted_sender: true})
+      names = Enum.map(defs, & &1["name"])
+
+      assert "send_whatsapp" in names
+    end
+
+    test "trusted sender gets store_memory for webhook trigger", %{scope: scope} do
+      agent = agent_fixture(scope)
+
+      defs = Tools.tool_definitions_for_agent(agent, "webhook", %{trusted_sender: true})
+      names = Enum.map(defs, & &1["name"])
+
+      assert "store_memory" in names
+    end
+
+    test "untrusted webhook still excludes send_whatsapp from definitions", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, _} = Agents.grant_bucket(agent, %{bucket: "whatsapp"})
+
+      defs = Tools.tool_definitions_for_agent(agent, "webhook", %{trusted_sender: false})
+      names = Enum.map(defs, & &1["name"])
+
+      refute "send_whatsapp" in names
     end
   end
 end

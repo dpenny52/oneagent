@@ -56,6 +56,12 @@ defmodule OneAgent.Telegram do
     |> Repo.one()
   end
 
+  def update_channel_unscoped(%Channel{} = channel, attrs) do
+    channel
+    |> Channel.update_changeset(attrs)
+    |> Repo.update()
+  end
+
   def get_channel_by_agent(agent_id) do
     Channel
     |> where(agent_id: ^agent_id, active: true)

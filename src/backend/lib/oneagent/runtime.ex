@@ -6,11 +6,11 @@ defmodule OneAgent.Runtime do
   alias OneAgent.Agents
   alias OneAgent.Runtime.{AgentSupervisor, AgentProcess}
 
-  def invoke_agent(%{user: _user} = scope, agent_id, message, trigger \\ "manual") do
+  def invoke_agent(%{user: _user} = scope, agent_id, message, trigger \\ "manual", opts \\ %{}) do
     with {:ok, agent} <- Agents.get_agent(scope, agent_id),
          :ok <- validate_has_llm_config(agent),
          :ok <- ensure_process_running(agent) do
-      AgentProcess.invoke(agent_id, message, trigger)
+      AgentProcess.invoke(agent_id, message, trigger, opts)
     end
   end
 

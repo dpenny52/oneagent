@@ -10,6 +10,7 @@ defmodule OneAgent.Telegram.Channel do
     field :bot_username, :string
     field :active, :boolean, default: true
     field :webhook_registered, :boolean, default: false
+    field :owner_chat_id, :string
 
     belongs_to :user, OneAgent.Accounts.User
     belongs_to :agent, OneAgent.Agents.Agent
@@ -32,7 +33,7 @@ defmodule OneAgent.Telegram.Channel do
 
   def update_changeset(channel, attrs) do
     channel
-    |> cast(attrs, [:agent_id, :credential_id, :bot_username, :active, :webhook_registered])
+    |> cast(attrs, [:agent_id, :credential_id, :bot_username, :active, :webhook_registered, :owner_chat_id])
     |> foreign_key_constraint(:agent_id)
     |> foreign_key_constraint(:credential_id)
   end
