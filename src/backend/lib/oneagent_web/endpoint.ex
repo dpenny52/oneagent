@@ -37,6 +37,7 @@ defmodule OneAgentWeb.Endpoint do
     body_reader: {OneAgentWeb.Plugs.CacheRawBody, :read_body, []},
     json_decoder: Phoenix.json_library()
 
+  plug OneAgentWeb.Plugs.RequestLogger
   plug Plug.MethodOverride
   plug Plug.Head
   plug OneAgentWeb.Router

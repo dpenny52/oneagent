@@ -9,6 +9,7 @@ defmodule OneAgentWeb.Plugs.RateLimit do
     - `:bucket_prefix` — custom prefix for the rate limit bucket (default: request path)
   """
   import Plug.Conn
+  require Logger
 
   def init(opts), do: opts
 
@@ -26,6 +27,8 @@ defmodule OneAgentWeb.Plugs.RateLimit do
         conn
 
       {:deny, _limit} ->
+        Logger.warning("Rate limited: bucket=#{bucket} limit=#{limit}/#{interval_ms}ms")
+
         conn
         |> put_resp_content_type("application/json")
         |> send_resp(429, Jason.encode!(%{error: "Too many requests. Please try again later."}))
