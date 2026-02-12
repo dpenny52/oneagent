@@ -26,7 +26,11 @@ defmodule OneAgent.Tools do
     OneAgent.Tools.ListGoals,
     OneAgent.Tools.PolymarketMarkets,
     OneAgent.Tools.PolymarketTrade,
-    OneAgent.Tools.PolymarketPortfolio
+    OneAgent.Tools.PolymarketPortfolio,
+    OneAgent.Tools.EvmBalance,
+    OneAgent.Tools.EvmTransfer,
+    OneAgent.Tools.EvmSwap,
+    OneAgent.Tools.EvmRead
   ]
 
   # Actions restricted for webhook-triggered runs to mitigate prompt injection.
@@ -41,7 +45,9 @@ defmodule OneAgent.Tools do
     "send_telegram" => :all,
     "store_memory" => :all,
     "polymarket_trade" => :all,
-    "polymarket_portfolio" => :all
+    "polymarket_portfolio" => :all,
+    "evm_transfer" => :all,
+    "evm_swap" => :all
   }
 
   @doc """

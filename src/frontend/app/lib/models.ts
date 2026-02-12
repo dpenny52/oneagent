@@ -24,6 +24,7 @@ export const BUCKET_NAMES = [
   "whatsapp",
   "telegram",
   "polymarket",
+  "evm",
 ] as const;
 
 /* ------------------------------------------------------------------ */
@@ -135,5 +136,16 @@ export const BUCKET_CONFIG: Record<(typeof BUCKET_NAMES)[number], BucketCredenti
     valuePlaceholder: '{"private_key": "0x..."}',
     defaultName: "Polymarket Wallet",
     serviceLabel: "Polymarket",
+  },
+  evm: {
+    needsCredential: true,
+    description: "Allow EVM on-chain transactions (transfers, swaps, contract reads)",
+    credentialType: "custom",
+    service: "evm",
+    isOAuth: false,
+    required: false,
+    valuePlaceholder: '{"private_key": "0x..."}',
+    defaultName: "EVM Wallet",
+    serviceLabel: "EVM",
   },
 };

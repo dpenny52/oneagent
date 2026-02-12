@@ -61,7 +61,9 @@ defmodule OneAgent.MixProject do
       {:oban, "~> 2.18"},
       {:crontab, "~> 1.1"},
       {:ex_keccak, "~> 0.7"},
-      {:ex_secp256k1, "~> 0.7"}
+      {:ex_secp256k1, "~> 0.7"},
+      {:ex_rlp, "~> 0.6"},
+      {:ex_abi, "~> 0.8"}
     ]
   end
 
