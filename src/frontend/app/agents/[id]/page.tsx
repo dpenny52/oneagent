@@ -315,7 +315,7 @@ function AgentDetailContent() {
 
         {/* ==================== PERMISSIONS TAB ==================== */}
         {tab === "permissions" && (
-          <PermissionsTab buckets={buckets} credentials={credentials} permLoading={permLoading} permMsg={permMsg} onToggleBucket={toggleBucket} onSetBucketCredential={setBucketCredential} onSave={handleSavePermissions} />
+          <PermissionsTab buckets={buckets} credentials={credentials} permLoading={permLoading} permMsg={permMsg} onToggleBucket={toggleBucket} onSetBucketCredential={setBucketCredential} onSave={handleSavePermissions} onCredentialCreated={(cred) => setCredentials((prev) => [cred, ...prev])} />
         )}
 
         {/* ==================== GUIDE TAB ==================== */}

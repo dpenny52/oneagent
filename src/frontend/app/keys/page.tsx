@@ -386,7 +386,8 @@ function KeysContent() {
                         <label style={labelStyle()}>Type</label>
                         <select value={credForm.credential_type} onChange={(e) => setCredForm((p) => ({ ...p, credential_type: e.target.value }))} style={selectStyle}>
                           <option value="api_key">API Key</option>
-                          <option value="oauth">OAuth</option>
+                          <option value="oauth_token">OAuth Token</option>
+                          <option value="basic_auth">Basic Auth</option>
                           <option value="custom">Custom (JSON)</option>
                         </select>
                       </div>
