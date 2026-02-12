@@ -4,6 +4,17 @@
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
+/** Turn Phoenix changeset errors like {"name": ["has already been taken"]} into a readable string. */
+function formatChangesetErrors(errors: unknown): string | null {
+  if (!errors || typeof errors !== "object") return null;
+  const parts: string[] = [];
+  for (const [field, msgs] of Object.entries(errors as Record<string, unknown>)) {
+    const list = Array.isArray(msgs) ? msgs : [msgs];
+    for (const m of list) parts.push(`${field} ${m}`);
+  }
+  return parts.length ? parts.join(", ") : null;
+}
+
 export type ApiOk<T> = { ok: true; data: T };
 export type ApiErr = { ok: false; error: string; status: number };
 export type ApiResult<T> = ApiOk<T> | ApiErr;
@@ -43,7 +54,7 @@ async function request<T>(
     if (!res.ok) {
       return {
         ok: false,
-        error: json.error || json.errors?.detail || "Request failed",
+        error: json.error || json.errors?.detail || formatChangesetErrors(json.errors) || "Request failed",
         status: res.status,
       };
     }
