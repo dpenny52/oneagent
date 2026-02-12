@@ -54,6 +54,14 @@ defmodule OneAgent.Tools.StoreMemory do
     run = context[:run]
     key = input["key"]
 
+    if is_nil(key) or (is_binary(key) and String.trim(key) == "") do
+      {:error, "A non-empty 'key' is required to store a memory."}
+    else
+      execute_store(agent, run, key, input)
+    end
+  end
+
+  defp execute_store(agent, run, key, input) do
     # Check memory count limit only for new keys (upserts on existing keys are always allowed)
     existing = OneAgent.Agents.get_memory(agent, key)
 
