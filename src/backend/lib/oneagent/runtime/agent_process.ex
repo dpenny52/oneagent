@@ -74,6 +74,8 @@ defmodule OneAgent.Runtime.AgentProcess do
     source = derive_source(trigger, opts)
     deadline = System.monotonic_time(:millisecond) + max_run_duration_ms()
 
+    Logger.info("Agent run start: agent=#{agent.id} provider=#{agent.model_provider} model=#{agent.model_id} trigger=#{trigger} source=#{source}")
+
     # Create run record
     {:ok, run} = Agents.create_run(agent, %{trigger: trigger})
     {:ok, run} = Agents.start_run(run)
@@ -97,8 +99,13 @@ defmodule OneAgent.Runtime.AgentProcess do
     system = build_system_prompt(agent, memories, schedules, goals)
 
     # Run the loop
+    run_start = System.monotonic_time(:millisecond)
+
     case agentic_loop(state, run, messages, tool_defs, system, 0, [], deadline, trigger, opts) do
       {:ok, final_text, run} ->
+        run_elapsed = System.monotonic_time(:millisecond) - run_start
+        Logger.info("Agent run complete: agent=#{agent.id} run=#{run.id} elapsed=#{run_elapsed}ms response_length=#{String.length(final_text)}")
+
         # Persist user message and assistant response to chat history
         case Agents.create_message(agent, %{role: "user", content: message, run_id: run.id, source: source}) do
           {:ok, _} -> :ok
@@ -111,6 +118,9 @@ defmodule OneAgent.Runtime.AgentProcess do
         {:ok, %{run_id: run.id, response: final_text}}
 
       {:error, reason, run} ->
+        run_elapsed = System.monotonic_time(:millisecond) - run_start
+        Logger.error("Agent run failed: agent=#{agent.id} run=#{run.id} elapsed=#{run_elapsed}ms error=#{inspect(reason)}")
+
         # Persist user message even on error so context isn't lost
         Agents.create_message(agent, %{role: "user", content: message, run_id: run.id, source: source})
         Agents.fail_run(run, reason)
@@ -142,6 +152,8 @@ defmodule OneAgent.Runtime.AgentProcess do
         remaining_ms = deadline - start_time
         timeout = remaining_ms |> Kernel.-(5_000) |> min(120_000) |> max(5_000)
         retries = if remaining_ms > 60_000, do: 1, else: 0
+
+        Logger.info("Agent loop step=#{step_count + 1}: agent=#{agent.id} messages=#{length(messages)} tools=#{length(tool_defs)} budget=#{remaining_ms}ms timeout=#{timeout}ms retries=#{retries}")
 
         # Call LLM
         llm_result = LLM.chat(
@@ -289,14 +301,19 @@ defmodule OneAgent.Runtime.AgentProcess do
 
     {results, final_step} =
       Enum.reduce(tool_uses, {[], step_count}, fn tool_use, {acc, current_step} ->
+        Logger.info("Tool call: agent=#{agent.id} tool=#{tool_use.name} args=#{inspect(Map.keys(tool_use.input))}")
         start_time = System.monotonic_time(:millisecond)
 
         result = Tools.execute_tool(tool_use.name, tool_use.input, context)
         duration_ms = System.monotonic_time(:millisecond) - start_time
 
         {output, status} = case result do
-          {:ok, output} -> {output, "completed"}
-          {:error, reason} -> {%{"error" => reason}, "failed"}
+          {:ok, output} ->
+            Logger.info("Tool result: agent=#{agent.id} tool=#{tool_use.name} status=ok elapsed=#{duration_ms}ms")
+            {output, "completed"}
+          {:error, reason} ->
+            Logger.warning("Tool result: agent=#{agent.id} tool=#{tool_use.name} status=failed elapsed=#{duration_ms}ms error=#{inspect(reason)}")
+            {%{"error" => reason}, "failed"}
         end
 
         # Determine which bucket was used
