@@ -193,9 +193,35 @@ defmodule OneAgent.Runtime.AgentProcess do
                 |> Enum.map(& &1.text)
                 |> Enum.join("\n")
 
-              # LLM sometimes returns empty content after tool use — retry once WITHOUT tools,
-              # including recent tool results so the LLM has context to form a response
-              if final_text == "" and step_count > 0 and step_count < agent.max_steps_per_run - 1 do
+              cond do
+                # Response truncated by max_tokens — LLM likely started a tool call but
+                # ran out of output tokens. Retry with the partial text preserved and a
+                # nudge to skip preamble and call tools directly.
+                response.stop_reason in ["max_tokens", "length"] and
+                  step_count < agent.max_steps_per_run - 1 ->
+                  Logger.warning("Agent #{agent.id} response truncated (stop_reason=#{response.stop_reason}), retrying to elicit tool call")
+
+                  nudge = %{"role" => "user", "content" => [
+                    %{"type" => "text", "text" => "[System: Your previous response was cut off before you could call a tool. Call the tool directly without any preamble text. Do NOT repeat what you already said.]"}
+                  ]}
+
+                  partial_content = if final_text != "" do
+                    [%{"type" => "text", "text" => final_text}]
+                  else
+                    []
+                  end
+
+                  retry_messages = messages ++ [
+                    %{"role" => "assistant", "content" => partial_content},
+                    nudge
+                  ]
+
+                  # Keep tool_defs so the LLM can actually call tools this time
+                  agentic_loop(state, run, retry_messages, tool_defs, system, step_count + 1, prev_tools, deadline, trigger, opts)
+
+                # LLM sometimes returns empty content after tool use — retry once WITHOUT tools,
+                # including recent tool results so the LLM has context to form a response
+                final_text == "" and step_count > 0 and step_count < agent.max_steps_per_run - 1 ->
                 Logger.warning("LLM returned empty content for agent #{agent.id}, retrying without tools")
 
                 tool_summary = extract_recent_tool_results(messages)
@@ -216,15 +242,16 @@ defmodule OneAgent.Runtime.AgentProcess do
 
                 # Pass empty tools list to force text-only response
                 agentic_loop(state, run, retry_messages, [], system, step_count + 1, prev_tools, deadline, trigger, opts)
-              else
-                final_text = if final_text == "", do: "[Agent produced no response]", else: final_text
 
-                {:ok, run} = Agents.complete_run(run, %{
-                  total_steps: step_count + 1,
-                  total_tokens_used: tokens
-                })
+                true ->
+                  final_text = if final_text == "", do: "[Agent produced no response]", else: final_text
 
-                {:ok, final_text, run}
+                  {:ok, run} = Agents.complete_run(run, %{
+                    total_steps: step_count + 1,
+                    total_tokens_used: tokens
+                  })
+
+                  {:ok, final_text, run}
               end
             else
               current_tools = tool_uses |> Enum.map(& &1.name) |> Enum.sort()
@@ -427,6 +454,7 @@ defmodule OneAgent.Runtime.AgentProcess do
     - Use store_memory to save important facts, preferences, or patterns that should persist beyond the conversation window.
     - Use recall_memory only when you need to retrieve something you previously stored with store_memory. \
     You can also use recall_memory with the "search" parameter to find memories by keyword.
+    - When you need to perform an action, ALWAYS call the appropriate tool. Never just describe what you would do — actually do it.
     - Always respond with a text message. Never end your turn silently after using a tool.
 
     ## Schedule Management
@@ -448,8 +476,9 @@ defmodule OneAgent.Runtime.AgentProcess do
     Do NOT call goal tools again after a successful result.
 
     ## Scheduled Execution Context
-    - When you run on a schedule, your messages are NOT stored in conversation history.
-    - If you discover important information during a scheduled run, use store_memory to save it.
+    - When you run on a schedule, your response IS visible to the user in their chat UI.
+    - Write a clear, concise summary of what you did and any results or findings.
+    - If you discover important information during a scheduled run, also use store_memory to save it.
     - Your stored memories persist across all runs and are always available above.
     """
 

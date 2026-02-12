@@ -260,6 +260,24 @@ defmodule OneAgent.Agents do
 
   # ── Messages (Chat History) ────────────────────────────────
 
+  @doc """
+  Messages for the chat API / display. Excludes scheduled user messages
+  (system triggers) but includes scheduled assistant messages (agent responses).
+  """
+  def list_messages_for_display(%Agent{} = agent, opts \\ []) do
+    limit = Keyword.get(opts, :limit) || agent.max_history_messages
+
+    subquery =
+      from m in AgentMessage,
+        where: m.agent_id == ^agent.id,
+        where: not (m.source == "scheduled" and m.role == "user"),
+        order_by: [desc: m.sequence],
+        limit: ^limit
+
+    from(m in subquery(subquery), order_by: [asc: m.sequence])
+    |> Repo.all()
+  end
+
   def list_recent_messages(%Agent{} = agent, opts \\ []) do
     limit = Keyword.get(opts, :limit) || agent.max_history_messages
     exclude_sources = Keyword.get(opts, :exclude_sources, ["scheduled"])

@@ -291,16 +291,20 @@ defmodule OneAgentWeb.AgentControllerTest do
   # ── Messages ─────────────────────────────────────────────────
 
   describe "GET /api/agents/:agent_id/messages" do
-    test "excludes scheduled messages", %{conn: conn, user: user} do
+    test "excludes scheduled user messages but includes scheduled assistant messages", %{conn: conn, user: user} do
       scope = OneAgent.Accounts.Scope.for_user(user)
       agent = agent_fixture(scope)
       _chat = message_fixture(agent, %{role: "user", content: "chat msg", source: "chat"})
-      _scheduled = message_fixture(agent, %{role: "assistant", content: "scheduled msg", source: "scheduled"})
+      _scheduled_user = message_fixture(agent, %{role: "user", content: "Execute your scheduled task", source: "scheduled"})
+      _scheduled_assistant = message_fixture(agent, %{role: "assistant", content: "scheduled response", source: "scheduled"})
 
       conn = get(conn, "/api/agents/#{agent.id}/messages")
       assert %{"data" => messages} = json_response(conn, 200)
-      assert length(messages) == 1
-      assert hd(messages)["content"] == "chat msg"
+      assert length(messages) == 2
+      contents = Enum.map(messages, & &1["content"])
+      assert "chat msg" in contents
+      assert "scheduled response" in contents
+      refute "Execute your scheduled task" in contents
     end
 
     test "includes source field in response", %{conn: conn, user: user} do

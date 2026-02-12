@@ -81,6 +81,13 @@ function AgentDetailContent() {
     if (tab === "chat") loadMessages();
   }, [tab, loadMessages]);
 
+  /* ---- Poll for new messages while on chat tab (paused during send) ---- */
+  useEffect(() => {
+    if (tab !== "chat" || sending) return;
+    const interval = setInterval(loadMessages, 15_000);
+    return () => clearInterval(interval);
+  }, [tab, loadMessages, sending]);
+
   /* ---- Load buckets + credentials when permissions tab (only first visit) ---- */
   useEffect(() => {
     if (tab === "permissions" && !bucketsLoaded) {

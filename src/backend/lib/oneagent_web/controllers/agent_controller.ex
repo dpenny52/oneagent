@@ -142,7 +142,7 @@ defmodule OneAgentWeb.AgentController do
     scope = conn.assigns.current_scope
 
     with {:ok, agent} <- Agents.get_agent(scope, id) do
-      messages = Agents.list_recent_messages(agent)
+      messages = Agents.list_messages_for_display(agent)
       render(conn, :messages_list, messages: messages)
     end
   end

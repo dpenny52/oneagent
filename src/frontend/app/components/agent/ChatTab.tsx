@@ -118,6 +118,9 @@ export function ChatTab({
           <div key={msg.id} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
             <div style={{ maxWidth: "75%", padding: "0.8rem 1rem", borderRadius: 14, background: msg.role === "user" ? `rgba(0,212,170,0.08)` : "rgba(155,114,207,0.06)", border: `1px solid ${msg.role === "user" ? `${C.glow}25` : `${C.lavender}20`}`, fontSize: "0.88rem", lineHeight: 1.6, color: C.text, wordBreak: "break-word" }}>
               <MessageContent content={msg.content} role={msg.role} />
+              {msg.source === "scheduled" && msg.role === "assistant" && (
+                <div style={{ marginTop: 6, fontSize: "0.7rem", color: C.muted, opacity: 0.7, fontStyle: "italic" }}>scheduled run</div>
+              )}
             </div>
           </div>
         ))}
