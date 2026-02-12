@@ -1,0 +1,14 @@
+{
+  "name": "polymarket-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy:gamma": "wrangler deploy --env gamma",
+    "deploy:clob": "wrangler deploy --env clob",
+    "deploy:data": "wrangler deploy --env data",
+    "deploy:all": "npm run deploy:gamma && npm run deploy:clob && npm run deploy:data"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

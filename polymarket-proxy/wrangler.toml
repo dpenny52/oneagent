@@ -1,0 +1,22 @@
+name = "polymarket-proxy"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+# Deploy 3 instances — one per Polymarket API.
+# Each gets its own *.workers.dev URL with clean paths,
+# so HMAC signatures computed by the backend stay valid.
+
+[env.gamma]
+name = "polymarket-gamma"
+[env.gamma.vars]
+TARGET_BASE = "https://gamma-api.polymarket.com"
+
+[env.clob]
+name = "polymarket-clob"
+[env.clob.vars]
+TARGET_BASE = "https://clob.polymarket.com"
+
+[env.data]
+name = "polymarket-data"
+[env.data.vars]
+TARGET_BASE = "https://data-api.polymarket.com"

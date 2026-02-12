@@ -33,6 +33,19 @@ config :oneagent, :google_calendar_client_id,
 config :oneagent, :google_calendar_client_secret,
   System.get_env("GOOGLE_CALENDAR_CLIENT_SECRET") || System.get_env("GOOGLE_CLIENT_SECRET")
 
+# Polymarket API proxy (optional — overrides default Polymarket endpoints)
+if polymarket_gamma = System.get_env("POLYMARKET_GAMMA_BASE") do
+  config :oneagent, :polymarket_gamma_base, polymarket_gamma
+end
+
+if polymarket_clob = System.get_env("POLYMARKET_CLOB_BASE") do
+  config :oneagent, :polymarket_clob_base, polymarket_clob
+end
+
+if polymarket_data = System.get_env("POLYMARKET_DATA_BASE") do
+  config :oneagent, :polymarket_data_base, polymarket_data
+end
+
 # Cloak encryption key (required in prod, optional in dev/test)
 if cloak_key = System.get_env("CLOAK_KEY") do
   config :oneagent, OneAgent.Vault,
