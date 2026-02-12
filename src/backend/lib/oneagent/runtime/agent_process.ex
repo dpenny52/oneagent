@@ -58,13 +58,14 @@ defmodule OneAgent.Runtime.AgentProcess do
   # ── Agentic Loop ─────────────────────────────────────────────
 
   defp run_agentic_loop(state, message, trigger, opts) do
-    agent = state.agent
+    # Reload agent from DB to pick up any setting changes (e.g. max_runs_per_day)
+    agent = OneAgent.Repo.get(Agents.Agent, state.agent.id) || state.agent
 
     # Check daily run limit
     if Agents.count_runs_today(agent) >= agent.max_runs_per_day do
       {:error, "Daily run limit exceeded (#{agent.max_runs_per_day})"}
     else
-      do_run(state, message, trigger, opts)
+      do_run(%{state | agent: agent}, message, trigger, opts)
     end
   end
 
