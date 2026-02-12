@@ -31,16 +31,19 @@ defmodule OneAgent.LLM.OpenAI do
     req_opts = Keyword.get(opts, :plug)
     extra = if req_opts, do: [plug: req_opts], else: []
 
-    case Req.post(@api_url, [json: body, headers: headers, receive_timeout: 120_000, retry: :transient, max_retries: 3] ++ extra) do
+    url = Keyword.get(opts, :base_url, @api_url)
+    error_prefix = Keyword.get(opts, :error_prefix, "OpenAI")
+
+    case Req.post(url, [json: body, headers: headers, receive_timeout: 120_000, retry: :transient, max_retries: 3] ++ extra) do
       {:ok, %Req.Response{status: 200, body: resp}} ->
         {:ok, parse_response(resp)}
 
       {:ok, %Req.Response{status: status, body: resp}} ->
         error_msg = get_in(resp, ["error", "message"]) || "HTTP #{status}"
-        {:error, "OpenAI API error: #{error_msg}"}
+        {:error, "#{error_prefix} API error: #{error_msg}"}
 
       {:error, reason} ->
-        {:error, "OpenAI API request failed: #{inspect(reason)}"}
+        {:error, "#{error_prefix} API request failed: #{inspect(reason)}"}
     end
   end
 

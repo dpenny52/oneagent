@@ -4,11 +4,12 @@ defmodule OneAgent.LLM do
   the agent's configuration.
   """
 
-  alias OneAgent.LLM.{Anthropic, OpenAI}
+  alias OneAgent.LLM.{Anthropic, OpenAI, Zhipu}
 
   @providers %{
     "anthropic" => Anthropic,
-    "openai" => OpenAI
+    "openai" => OpenAI,
+    "zhipu" => Zhipu
   }
 
   def provider_module(provider_name) do

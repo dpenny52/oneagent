@@ -10,6 +10,11 @@ export const MODEL_OPTIONS: Record<string, { id: string; label: string }[]> = {
     { id: "gpt-4o-mini", label: "GPT-4o Mini" },
     { id: "o3-mini", label: "o3-mini" },
   ],
+  zhipu: [
+    { id: "glm-5", label: "GLM-5" },
+    { id: "glm-4.7", label: "GLM-4.7" },
+    { id: "glm-4.7-flash", label: "GLM-4.7 Flash" },
+  ],
 };
 
 export const BUCKET_NAMES = [

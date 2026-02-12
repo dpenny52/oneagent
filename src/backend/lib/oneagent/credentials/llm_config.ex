@@ -16,7 +16,7 @@ defmodule OneAgent.Credentials.LlmConfig do
     timestamps(type: :utc_datetime)
   end
 
-  @valid_providers ~w(anthropic openai)
+  @valid_providers ~w(anthropic openai zhipu)
 
   def changeset(config, attrs) do
     config

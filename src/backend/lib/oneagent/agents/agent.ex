@@ -27,7 +27,7 @@ defmodule OneAgent.Agents.Agent do
     timestamps(type: :utc_datetime)
   end
 
-  @valid_providers ~w(anthropic openai)
+  @valid_providers ~w(anthropic openai zhipu)
 
   @required_fields [:name, :system_prompt, :model_provider, :model_id]
   @optional_fields [

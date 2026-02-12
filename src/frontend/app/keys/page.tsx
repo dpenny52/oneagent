@@ -215,7 +215,7 @@ function KeysContent() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
                 <div>
                   <h2 style={{ fontFamily: "var(--font-instrument), serif", fontSize: "1.6rem", color: "#fff", fontWeight: 400, marginBottom: "0.2rem" }}>LLM API Keys</h2>
-                  <p style={{ fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: "0.85rem", color: C.muted }}>API keys for Anthropic, OpenAI, etc.</p>
+                  <p style={{ fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: "0.85rem", color: C.muted }}>API keys for Anthropic, OpenAI, Zhipu, etc.</p>
                 </div>
                 <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => { resetConfigForm(); setShowAddConfig(true); }} style={{ padding: "0.6rem 1.2rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${C.glow}, ${C.forest})`, color: C.bg, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}>
                   + Add Key
@@ -240,17 +240,18 @@ function KeysContent() {
                           <select value={configForm.provider} onChange={(e) => setConfigForm((p) => ({ ...p, provider: e.target.value }))} style={selectStyle}>
                             <option value="anthropic">Anthropic</option>
                             <option value="openai">OpenAI</option>
+                            <option value="zhipu">Zhipu (GLM)</option>
                           </select>
                         </div>
                         <div>
                           <label style={labelStyle()}>Label</label>
-                          <input required value={configForm.label} onChange={(e) => setConfigForm((p) => ({ ...p, label: e.target.value }))} placeholder={configForm.provider === "openai" ? "My OpenAI Key" : "My Anthropic Key"} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
+                          <input required value={configForm.label} onChange={(e) => setConfigForm((p) => ({ ...p, label: e.target.value }))} placeholder={configForm.provider === "openai" ? "My OpenAI Key" : configForm.provider === "zhipu" ? "My Zhipu Key" : "My Anthropic Key"} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
                         </div>
                       </div>
 
                       <div>
                         <label style={labelStyle()}>API Key {editingConfig && "(leave blank to keep)"}</label>
-                        <input type="password" required={!editingConfig} value={configForm.api_key} onChange={(e) => setConfigForm((p) => ({ ...p, api_key: e.target.value }))} placeholder={editingConfig ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : configForm.provider === "openai" ? "sk-..." : "sk-ant-..."} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
+                        <input type="password" required={!editingConfig} value={configForm.api_key} onChange={(e) => setConfigForm((p) => ({ ...p, api_key: e.target.value }))} placeholder={editingConfig ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : configForm.provider === "openai" ? "sk-..." : configForm.provider === "zhipu" ? "your-zhipu-api-key" : "sk-ant-..."} style={inputStyle()} onFocus={applyFocus} onBlur={removeFocus} />
                       </div>
 
                       <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
