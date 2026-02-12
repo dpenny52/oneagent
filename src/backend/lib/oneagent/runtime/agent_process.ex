@@ -130,6 +130,10 @@ defmodule OneAgent.Runtime.AgentProcess do
         {:ok, "[Run timed out after #{div(max_run_duration_ms(), 1000)} seconds]", run}
 
       true ->
+        # Throttle between iterations to avoid LLM API rate limits.
+        # Skip the first iteration (step_count == 0) so initial response is instant.
+        if step_count > 0, do: Process.sleep(1_500)
+
         start_time = System.monotonic_time(:millisecond)
 
         # Call LLM
