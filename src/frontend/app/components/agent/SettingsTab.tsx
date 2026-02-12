@@ -43,6 +43,7 @@ export function SettingsTab({
               <select value={settingsForm.model_provider || "anthropic"} onChange={(e) => { const prov = e.target.value; setSettingsForm((p) => ({ ...p, model_provider: prov, model_id: MODEL_OPTIONS[prov]?.[0]?.id || p.model_id, llm_config_id: null })); }} style={selectStyle}>
                 <option value="anthropic">Anthropic</option>
                 <option value="openai">OpenAI</option>
+                <option value="zhipu">Zhipu (GLM)</option>
               </select>
             </div>
             <div>

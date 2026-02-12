@@ -188,6 +188,7 @@ function DashboardContent() {
                     <select value={modelProvider} onChange={(e) => { const prov = e.target.value; setModelProvider(prov); setModelId(MODEL_OPTIONS[prov]?.[0]?.id || ""); setLlmConfigId(""); }} style={selectStyle}>
                       <option value="anthropic">Anthropic</option>
                       <option value="openai">OpenAI</option>
+                      <option value="zhipu">Zhipu (GLM)</option>
                     </select>
                   </div>
                   <div>
