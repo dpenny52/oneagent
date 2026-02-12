@@ -126,7 +126,7 @@ defmodule OneAgent.Polymarket.Client do
 
   defp post_authenticated(url, body, api_creds, _private_key_hex) do
     timestamp = to_string(System.system_time(:second))
-    path = URI.parse(url).path
+    path = api_path(url)
     body_json = Jason.encode!(body)
 
     hmac = Crypto.hmac_signature(api_creds["secret"], timestamp, "POST", path, body_json)
@@ -150,7 +150,7 @@ defmodule OneAgent.Polymarket.Client do
 
   defp get_authenticated(url, params, api_creds) do
     timestamp = to_string(System.system_time(:second))
-    path = URI.parse(url).path
+    path = api_path(url)
     query = URI.encode_query(params)
     full_path = if query == "", do: path, else: "#{path}?#{query}"
 
@@ -173,7 +173,7 @@ defmodule OneAgent.Polymarket.Client do
 
   defp delete_authenticated(url, api_creds) do
     timestamp = to_string(System.system_time(:second))
-    path = URI.parse(url).path
+    path = api_path(url)
 
     hmac = Crypto.hmac_signature(api_creds["secret"], timestamp, "DELETE", path)
 
@@ -251,6 +251,16 @@ defmodule OneAgent.Polymarket.Client do
 
   defp sanitize_error(body) when is_binary(body), do: String.slice(body, 0, 200)
   defp sanitize_error(_), do: "unknown error"
+
+  # Extract the API-facing path from a proxied URL.
+  # When using a proxy with path-prefix routing (e.g. proxy.fly.dev/clob/order),
+  # the HMAC must be signed against the path Polymarket sees (/order), not the
+  # full proxy path (/clob/order). Strips the clob_base() path prefix if present.
+  defp api_path(url) do
+    uri_path = URI.parse(url).path
+    base_path = URI.parse(clob_base()).path || ""
+    String.replace_prefix(uri_path, base_path, "")
+  end
 
   defp gamma_base, do: Application.get_env(:oneagent, :polymarket_gamma_base, @gamma_base)
   defp clob_base, do: Application.get_env(:oneagent, :polymarket_clob_base, @clob_base)
