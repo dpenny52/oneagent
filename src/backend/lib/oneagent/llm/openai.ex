@@ -28,13 +28,16 @@ defmodule OneAgent.LLM.OpenAI do
       {"content-type", "application/json"}
     ]
 
+    recv_timeout = Keyword.get(opts, :receive_timeout, 120_000)
+    max_retries = Keyword.get(opts, :max_retries, 3)
+
     req_opts = Keyword.get(opts, :plug)
     extra = if req_opts, do: [plug: req_opts], else: []
 
     url = Keyword.get(opts, :base_url, @api_url)
     error_prefix = Keyword.get(opts, :error_prefix, "OpenAI")
 
-    case Req.post(url, [json: body, headers: headers, receive_timeout: 120_000, retry: :transient, max_retries: 3] ++ extra) do
+    case Req.post(url, [json: body, headers: headers, receive_timeout: recv_timeout, retry: :transient, max_retries: max_retries] ++ extra) do
       {:ok, %Req.Response{status: 200, body: resp}} ->
         {:ok, parse_response(resp)}
 

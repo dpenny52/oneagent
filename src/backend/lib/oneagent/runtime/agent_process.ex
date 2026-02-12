@@ -137,6 +137,12 @@ defmodule OneAgent.Runtime.AgentProcess do
 
         start_time = System.monotonic_time(:millisecond)
 
+        # Budget the LLM call so it can't exceed the run deadline.
+        # Reserve 5 s for GenServer overhead; allow 1 retry when > 60 s remain.
+        remaining_ms = deadline - start_time
+        timeout = remaining_ms |> Kernel.-(5_000) |> min(120_000) |> max(5_000)
+        retries = if remaining_ms > 60_000, do: 1, else: 0
+
         # Call LLM
         llm_result = LLM.chat(
           agent.model_provider,
@@ -145,7 +151,9 @@ defmodule OneAgent.Runtime.AgentProcess do
           messages,
           system: system,
           tools: tool_defs,
-          max_tokens: Map.get(agent.model_config, "max_tokens", 4096)
+          max_tokens: Map.get(agent.model_config, "max_tokens", 4096),
+          receive_timeout: timeout,
+          max_retries: retries
         )
 
         duration_ms = System.monotonic_time(:millisecond) - start_time
