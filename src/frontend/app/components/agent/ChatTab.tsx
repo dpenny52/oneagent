@@ -1,7 +1,84 @@
 import { motion } from "framer-motion";
-import { useRef, useEffect, FormEvent } from "react";
+import { useRef, useEffect, useState, FormEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { C, inputStyle, glassCard } from "../../lib/theme";
 import type { Message } from "../../lib/types";
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+      style={{ position: "absolute", top: 8, right: 8, padding: "0.25rem 0.5rem", borderRadius: 6, border: `1px solid ${C.faint}`, background: "rgba(6,14,18,0.8)", color: copied ? C.glow : C.muted, fontFamily: "var(--font-dm), sans-serif", fontSize: "0.7rem", cursor: "pointer" }}
+    >
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
+}
+
+function MessageContent({ content, role }: { content: string; role: string }) {
+  if (role === "user") {
+    return <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{content}</span>;
+  }
+
+  return (
+    <div className="md-content">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: ({ children }) => <p style={{ margin: "0.4em 0" }}>{children}</p>,
+          strong: ({ children }) => <strong style={{ color: C.text, fontWeight: 600 }}>{children}</strong>,
+          em: ({ children }) => <em style={{ color: C.phosphor }}>{children}</em>,
+          a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: C.glow, textDecoration: "underline" }}>{children}</a>,
+          ul: ({ children }) => <ul style={{ margin: "0.4em 0", paddingLeft: "1.4em" }}>{children}</ul>,
+          ol: ({ children }) => <ol style={{ margin: "0.4em 0", paddingLeft: "1.4em" }}>{children}</ol>,
+          li: ({ children }) => <li style={{ margin: "0.2em 0" }}>{children}</li>,
+          h1: ({ children }) => <h1 style={{ fontSize: "1.15em", fontWeight: 700, color: C.text, margin: "0.6em 0 0.3em" }}>{children}</h1>,
+          h2: ({ children }) => <h2 style={{ fontSize: "1.05em", fontWeight: 600, color: C.text, margin: "0.5em 0 0.2em" }}>{children}</h2>,
+          h3: ({ children }) => <h3 style={{ fontSize: "0.95em", fontWeight: 600, color: C.phosphor, margin: "0.4em 0 0.2em" }}>{children}</h3>,
+          blockquote: ({ children }) => (
+            <blockquote style={{ margin: "0.5em 0", padding: "0.3em 0.8em", borderLeft: `3px solid ${C.lavender}60`, color: C.muted, background: "rgba(155,114,207,0.04)", borderRadius: "0 6px 6px 0" }}>
+              {children}
+            </blockquote>
+          ),
+          hr: () => <hr style={{ border: "none", borderTop: `1px solid ${C.faint}`, margin: "0.6em 0" }} />,
+          table: ({ children }) => (
+            <div style={{ overflowX: "auto", margin: "0.5em 0" }}>
+              <table style={{ borderCollapse: "collapse", fontSize: "0.85em", width: "100%" }}>{children}</table>
+            </div>
+          ),
+          th: ({ children }) => <th style={{ padding: "0.4em 0.6em", borderBottom: `1px solid ${C.faint}`, textAlign: "left", color: C.phosphor, fontWeight: 600 }}>{children}</th>,
+          td: ({ children }) => <td style={{ padding: "0.4em 0.6em", borderBottom: `1px solid ${C.faint}15`, color: C.text }}>{children}</td>,
+          pre: ({ children }) => {
+            const extractText = (node: unknown): string => {
+              if (typeof node === "string") return node;
+              if (Array.isArray(node)) return node.map(extractText).join("");
+              if (node && typeof node === "object" && "props" in node) return extractText((node as { props: { children?: unknown } }).props.children);
+              return "";
+            };
+            const text = extractText(children).replace(/\n$/, "");
+            return (
+              <div style={{ position: "relative", margin: "0.5em 0" }}>
+                <pre style={{ padding: "1rem", borderRadius: 10, background: "rgba(0,0,0,0.3)", border: `1px solid ${C.faint}`, color: C.phosphor, fontSize: "0.82em", fontFamily: "monospace", overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all", lineHeight: 1.5 }}>
+                  <code>{text}</code>
+                </pre>
+                <CopyButton text={text} />
+              </div>
+            );
+          },
+          code: ({ children }) => (
+            <code style={{ padding: "0.15em 0.35em", borderRadius: 5, background: "rgba(0,0,0,0.25)", color: C.phosphor, fontSize: "0.9em", fontFamily: "monospace" }}>
+              {children}
+            </code>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 export function ChatTab({
   canChat,
@@ -39,8 +116,8 @@ export function ChatTab({
         )}
         {messages.map((msg) => (
           <div key={msg.id} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
-            <div style={{ maxWidth: "75%", padding: "0.8rem 1rem", borderRadius: 14, background: msg.role === "user" ? `rgba(0,212,170,0.08)` : "rgba(155,114,207,0.06)", border: `1px solid ${msg.role === "user" ? `${C.glow}25` : `${C.lavender}20`}`, fontSize: "0.88rem", lineHeight: 1.6, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {msg.content}
+            <div style={{ maxWidth: "75%", padding: "0.8rem 1rem", borderRadius: 14, background: msg.role === "user" ? `rgba(0,212,170,0.08)` : "rgba(155,114,207,0.06)", border: `1px solid ${msg.role === "user" ? `${C.glow}25` : `${C.lavender}20`}`, fontSize: "0.88rem", lineHeight: 1.6, color: C.text, wordBreak: "break-word" }}>
+              <MessageContent content={msg.content} role={msg.role} />
             </div>
           </div>
         ))}
