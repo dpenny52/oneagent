@@ -101,7 +101,7 @@ function DashboardContent() {
   const selectStyle: React.CSSProperties = { ...inputStyle(), appearance: "none" as const, cursor: "pointer" };
 
   return (
-    <div className={fontVars} style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "var(--font-dm), sans-serif", position: "relative" }}>
+    <div className={fontVars} style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "var(--font-dm), sans-serif", position: "relative", overflow: "hidden" }}>
       <Orb size={400} color={C.glow} top="-5%" left="-8%" animation="drift1" duration="20s" opacity={0.08} />
       <Orb size={300} color={C.lavender} top="30%" left="80%" animation="drift2" duration="24s" opacity={0.06} />
       <MeshGradient opacity={0.2} threeGradients={false} />

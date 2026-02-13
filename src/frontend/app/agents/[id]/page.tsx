@@ -278,7 +278,7 @@ function AgentDetailContent() {
   function switchTab(t: Tab) { setTab(t); }
 
   return (
-    <div className={fontVars} style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "var(--font-dm), sans-serif", position: "relative" }}>
+    <div className={fontVars} style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "var(--font-dm), sans-serif", position: "relative", overflow: "hidden" }}>
       <Orb size={400} color={C.glow} top="-5%" left="-8%" animation="drift1" duration="20s" opacity={0.06} />
       <Orb size={300} color={C.lavender} top="40%" left="85%" animation="drift2" duration="24s" opacity={0.05} />
       <MeshGradient opacity={0.15} threeGradients={false} />
