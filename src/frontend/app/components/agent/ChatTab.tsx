@@ -101,11 +101,7 @@ export function ChatTab({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(messages.length);
   const userSentRef = useRef(false);
-
-  // Scroll to bottom when tab first opens
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "instant" });
-  }, []);
+  const initialScrollDone = useRef(false);
 
   // Track when user sends a message (sending transitions from false → true)
   useEffect(() => {
@@ -115,6 +111,16 @@ export function ChatTab({
   useEffect(() => {
     const container = chatContainerRef.current;
     if (!container) return;
+
+    // Snap to bottom on initial load (first time messages appear, or tab opened with messages)
+    if (!initialScrollDone.current) {
+      if (messages.length > 0) {
+        initialScrollDone.current = true;
+        chatEndRef.current?.scrollIntoView({ behavior: "instant" });
+      }
+      prevMessageCountRef.current = messages.length;
+      return;
+    }
 
     const isNewMessage = messages.length > prevMessageCountRef.current;
     const wasUserSend = userSentRef.current;
