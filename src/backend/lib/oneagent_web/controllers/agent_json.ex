@@ -1,6 +1,12 @@
 defmodule OneAgentWeb.AgentJSON do
   alias OneAgent.Agents.{Agent, AgentBucket, AgentRun, AgentStep, AgentMemory, AgentMessage, AgentSchedule, AgentGoal, AgentGoalStep}
 
+  def render("index.json", %{agents_with_runs: agents_with_runs}) do
+    %{data: Enum.map(agents_with_runs, fn {agent, last_run} ->
+      agent_data(agent) |> Map.put(:last_run, last_run_data(last_run))
+    end)}
+  end
+
   def render("index.json", %{agents: agents}) do
     %{data: Enum.map(agents, &agent_data/1)}
   end
@@ -11,6 +17,10 @@ defmodule OneAgentWeb.AgentJSON do
 
   def render("buckets.json", %{buckets: buckets}) do
     %{data: Enum.map(buckets, &bucket_data/1)}
+  end
+
+  def render("runs.json", %{runs: runs, meta: meta}) do
+    %{data: Enum.map(runs, &run_data/1), meta: meta}
   end
 
   def render("runs.json", %{runs: runs}) do
@@ -184,6 +194,21 @@ defmodule OneAgentWeb.AgentJSON do
       schedule_id: step.schedule_id,
       result_notes: step.result_notes,
       completed_at: step.completed_at
+    }
+  end
+
+  defp last_run_data(%{id: nil}), do: nil
+  defp last_run_data(%{id: _} = run) do
+    %{
+      id: run.id,
+      status: run.status,
+      trigger: run.trigger,
+      started_at: run.started_at,
+      completed_at: run.completed_at,
+      total_tokens_used: run.total_tokens_used,
+      total_steps: run.total_steps,
+      error_message: run.error_message,
+      inserted_at: run.inserted_at
     }
   end
 end

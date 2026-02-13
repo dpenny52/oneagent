@@ -7,8 +7,8 @@ defmodule OneAgentWeb.AgentController do
 
   def index(conn, _params) do
     scope = conn.assigns.current_scope
-    agents = Agents.list_agents(scope)
-    render(conn, :index, agents: agents)
+    agents_with_runs = Agents.list_agents_with_last_run(scope)
+    render(conn, :index, agents_with_runs: agents_with_runs)
   end
 
   def create(conn, %{"agent" => agent_params}) do
@@ -98,12 +98,28 @@ defmodule OneAgentWeb.AgentController do
 
   # ── Runs ─────────────────────────────────────────────────────
 
-  def list_runs(conn, %{"agent_id" => id}) do
+  def list_runs(conn, %{"agent_id" => id} = params) do
     scope = conn.assigns.current_scope
 
     with {:ok, agent} <- Agents.get_agent(scope, id) do
-      runs = Agents.list_runs(agent)
-      render(conn, :runs, runs: runs)
+      opts = [
+        limit: parse_int(params["limit"], 20),
+        offset: parse_int(params["offset"], 0),
+        status: params["status"],
+        trigger: params["trigger"]
+      ]
+
+      runs = Agents.list_runs(agent, opts)
+      total = Agents.count_runs(agent, opts)
+      render(conn, :runs, runs: runs, meta: %{total: total, offset: opts[:offset], limit: opts[:limit]})
+    end
+  end
+
+  defp parse_int(nil, default), do: default
+  defp parse_int(val, default) when is_binary(val) do
+    case Integer.parse(val) do
+      {n, _} -> n
+      :error -> default
     end
   end
 

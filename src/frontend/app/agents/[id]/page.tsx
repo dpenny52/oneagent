@@ -17,6 +17,7 @@ import { SettingsTab } from "../../components/agent/SettingsTab";
 import { SchedulesTab } from "../../components/agent/SchedulesTab";
 import { PermissionsTab } from "../../components/agent/PermissionsTab";
 import { GuideTab } from "../../components/agent/GuideTab";
+import { ActivityTab } from "../../components/agent/ActivityTab";
 
 /* ================================================================== */
 /*  Agent detail content                                               */
@@ -273,7 +274,7 @@ function AgentDetailContent() {
   }
 
   const canChat = agent.has_llm_config;
-  const tabNames: Tab[] = ["chat", "schedules", "settings", "permissions", "guide"];
+  const tabNames: Tab[] = ["chat", "activity", "schedules", "settings", "permissions", "guide"];
   function switchTab(t: Tab) { setTab(t); }
 
   return (
@@ -308,6 +309,11 @@ function AgentDetailContent() {
         {/* ==================== CHAT TAB ==================== */}
         {tab === "chat" && (
           <ChatTab canChat={canChat} messages={messages} chatInput={chatInput} setChatInput={setChatInput} sending={sending} onSend={handleSend} onClearHistory={handleClearHistory} />
+        )}
+
+        {/* ==================== ACTIVITY TAB ==================== */}
+        {tab === "activity" && (
+          <ActivityTab agentId={agent.id} />
         )}
 
         {/* ==================== SCHEDULES TAB ==================== */}

@@ -19,6 +19,22 @@ defmodule OneAgent.Agents do
     |> Repo.all()
   end
 
+  def list_agents_with_last_run(%{user: user}) do
+    last_run_query =
+      from r in AgentRun,
+        where: r.agent_id == parent_as(:agent).id,
+        order_by: [desc: r.inserted_at],
+        limit: 1
+
+    from(a in Agent, as: :agent,
+      where: a.user_id == ^user.id,
+      order_by: [desc: a.inserted_at],
+      left_lateral_join: lr in subquery(last_run_query), on: true,
+      select: {a, %{id: lr.id, status: lr.status, trigger: lr.trigger, started_at: lr.started_at, completed_at: lr.completed_at, total_tokens_used: lr.total_tokens_used, total_steps: lr.total_steps, error_message: lr.error_message, inserted_at: lr.inserted_at}}
+    )
+    |> Repo.all()
+  end
+
   def get_agent(%{user: user}, id) do
     case Repo.get_by(Agent, id: id, user_id: user.id) do
       nil -> {:error, :not_found}
@@ -121,13 +137,36 @@ defmodule OneAgent.Agents do
 
   def list_runs(%Agent{} = agent, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
+    offset = Keyword.get(opts, :offset, 0)
+    status = Keyword.get(opts, :status)
+    trigger = Keyword.get(opts, :trigger)
 
     AgentRun
     |> where(agent_id: ^agent.id)
+    |> maybe_filter_status(status)
+    |> maybe_filter_trigger(trigger)
     |> order_by(desc: :inserted_at)
     |> limit(^limit)
+    |> offset(^offset)
     |> Repo.all()
   end
+
+  def count_runs(%Agent{} = agent, opts \\ []) do
+    status = Keyword.get(opts, :status)
+    trigger = Keyword.get(opts, :trigger)
+
+    AgentRun
+    |> where(agent_id: ^agent.id)
+    |> maybe_filter_status(status)
+    |> maybe_filter_trigger(trigger)
+    |> Repo.aggregate(:count)
+  end
+
+  defp maybe_filter_status(query, nil), do: query
+  defp maybe_filter_status(query, status), do: where(query, [r], r.status == ^status)
+
+  defp maybe_filter_trigger(query, nil), do: query
+  defp maybe_filter_trigger(query, trigger), do: where(query, [r], r.trigger == ^trigger)
 
   def get_run(%Agent{} = agent, run_id) do
     case Repo.get_by(AgentRun, id: run_id, agent_id: agent.id) do

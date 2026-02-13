@@ -7,12 +7,21 @@ defmodule OneAgentWeb.AgentControllerTest do
   setup :register_and_log_in_user
 
   describe "GET /api/agents" do
-    test "lists agents for authenticated user", %{conn: conn, user: user} do
+    test "lists agents for authenticated user with last_run", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+      _run = agent_run_fixture(agent, %{trigger: "manual"})
+
+      conn = get(conn, "/api/agents")
+      assert %{"data" => [%{"id" => _, "last_run" => %{"trigger" => "manual"}}]} = json_response(conn, 200)
+    end
+
+    test "returns null last_run when agent has no runs", %{conn: conn, user: user} do
       scope = OneAgent.Accounts.Scope.for_user(user)
       _agent = agent_fixture(scope)
 
       conn = get(conn, "/api/agents")
-      assert %{"data" => [%{"id" => _}]} = json_response(conn, 200)
+      assert %{"data" => [%{"id" => _, "last_run" => nil}]} = json_response(conn, 200)
     end
 
     test "returns empty list when no agents", %{conn: conn} do
@@ -159,13 +168,35 @@ defmodule OneAgentWeb.AgentControllerTest do
   end
 
   describe "GET /api/agents/:agent_id/runs" do
-    test "lists runs for an agent", %{conn: conn, user: user} do
+    test "lists runs for an agent with meta", %{conn: conn, user: user} do
       scope = OneAgent.Accounts.Scope.for_user(user)
       agent = agent_fixture(scope)
       _run = agent_run_fixture(agent)
 
       conn = get(conn, "/api/agents/#{agent.id}/runs")
-      assert %{"data" => [%{"id" => _}]} = json_response(conn, 200)
+      assert %{"data" => [%{"id" => _}], "meta" => %{"total" => 1, "offset" => 0, "limit" => 20}} = json_response(conn, 200)
+    end
+
+    test "filters runs by status and trigger", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+      _manual = agent_run_fixture(agent, %{trigger: "manual"})
+      _scheduled = agent_run_fixture(agent, %{trigger: "scheduled"})
+
+      conn = get(conn, "/api/agents/#{agent.id}/runs?trigger=scheduled")
+      assert %{"data" => [%{"trigger" => "scheduled"}], "meta" => %{"total" => 1}} = json_response(conn, 200)
+    end
+
+    test "paginates runs with offset and limit", %{conn: conn, user: user} do
+      scope = OneAgent.Accounts.Scope.for_user(user)
+      agent = agent_fixture(scope)
+      _run1 = agent_run_fixture(agent)
+      _run2 = agent_run_fixture(agent)
+      _run3 = agent_run_fixture(agent)
+
+      conn = get(conn, "/api/agents/#{agent.id}/runs?limit=2&offset=1")
+      assert %{"data" => runs, "meta" => %{"total" => 3, "offset" => 1, "limit" => 2}} = json_response(conn, 200)
+      assert length(runs) == 2
     end
   end
 

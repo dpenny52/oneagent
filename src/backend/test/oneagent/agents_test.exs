@@ -28,6 +28,25 @@ defmodule OneAgent.AgentsTest do
     end
   end
 
+  describe "list_agents_with_last_run/1" do
+    test "returns agent with last_run data when runs exist", %{scope: scope} do
+      agent = agent_fixture(scope)
+      _run = agent_run_fixture(agent, %{trigger: "manual"})
+
+      [{returned_agent, last_run}] = Agents.list_agents_with_last_run(scope)
+      assert returned_agent.id == agent.id
+      assert last_run.id != nil
+      assert last_run.trigger == "manual"
+    end
+
+    test "returns nil-id last_run when no runs exist", %{scope: scope} do
+      _agent = agent_fixture(scope)
+
+      [{_returned_agent, last_run}] = Agents.list_agents_with_last_run(scope)
+      assert last_run.id == nil
+    end
+  end
+
   describe "get_agent/2" do
     test "returns the agent for the given user", %{scope: scope} do
       agent = agent_fixture(scope)
@@ -226,6 +245,47 @@ defmodule OneAgent.AgentsTest do
       agent = agent_fixture(scope)
       _run = agent_run_fixture(agent)
       assert [_] = Agents.list_runs(agent)
+    end
+
+    test "list_runs with offset skips earlier runs", %{scope: scope} do
+      agent = agent_fixture(scope)
+      _run1 = agent_run_fixture(agent)
+      _run2 = agent_run_fixture(agent)
+      _run3 = agent_run_fixture(agent)
+
+      runs = Agents.list_runs(agent, offset: 1, limit: 10)
+      assert length(runs) == 2
+    end
+
+    test "list_runs with status filter", %{scope: scope} do
+      agent = agent_fixture(scope)
+      {:ok, run} = Agents.create_run(agent, %{trigger: "manual"})
+      {:ok, _} = Agents.start_run(run)
+      _pending = agent_run_fixture(agent)
+
+      runs = Agents.list_runs(agent, status: "running")
+      assert length(runs) == 1
+      assert hd(runs).status == "running"
+    end
+
+    test "list_runs with trigger filter", %{scope: scope} do
+      agent = agent_fixture(scope)
+      _manual = agent_run_fixture(agent, %{trigger: "manual"})
+      _scheduled = agent_run_fixture(agent, %{trigger: "scheduled"})
+
+      runs = Agents.list_runs(agent, trigger: "scheduled")
+      assert length(runs) == 1
+      assert hd(runs).trigger == "scheduled"
+    end
+
+    test "count_runs returns correct count", %{scope: scope} do
+      agent = agent_fixture(scope)
+      _run1 = agent_run_fixture(agent, %{trigger: "manual"})
+      _run2 = agent_run_fixture(agent, %{trigger: "scheduled"})
+
+      assert Agents.count_runs(agent) == 2
+      assert Agents.count_runs(agent, trigger: "manual") == 1
+      assert Agents.count_runs(agent, trigger: "scheduled") == 1
     end
 
     test "get_run_with_steps returns run with steps", %{scope: scope} do

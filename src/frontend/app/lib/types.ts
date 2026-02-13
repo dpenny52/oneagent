@@ -11,6 +11,7 @@ export interface Agent {
   llm_config_id: string | null;
   has_llm_config: boolean;
   inserted_at: string;
+  last_run?: AgentRun | null;
 }
 
 /** Extended agent with full settings fields (used on agent detail page) */
@@ -101,4 +102,31 @@ export interface Spore {
   color: string;
 }
 
-export type Tab = "chat" | "schedules" | "settings" | "permissions" | "guide";
+export interface AgentRun {
+  id: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  trigger: "manual" | "scheduled" | "webhook" | "continuous";
+  started_at: string | null;
+  completed_at: string | null;
+  total_tokens_used: number | null;
+  total_steps: number | null;
+  error_message: string | null;
+  inserted_at: string;
+}
+
+export interface AgentStep {
+  id: string;
+  step_number: number;
+  step_type: "llm_call" | "tool_execution" | "error";
+  tool_id: string | null;
+  bucket: string | null;
+  tokens_used: number | null;
+  duration_ms: number | null;
+  status: "completed" | "failed";
+}
+
+export interface AgentRunDetail extends AgentRun {
+  steps: AgentStep[];
+}
+
+export type Tab = "chat" | "activity" | "schedules" | "settings" | "permissions" | "guide";

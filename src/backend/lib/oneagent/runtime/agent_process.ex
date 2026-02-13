@@ -243,6 +243,24 @@ defmodule OneAgent.Runtime.AgentProcess do
                 # Pass empty tools list to force text-only response
                 agentic_loop(state, run, retry_messages, [], system, step_count + 1, prev_tools, deadline, trigger, opts)
 
+                # LLM narrated what it intends to do but never called a tool —
+                # text ending with ":" is the classic preamble-to-nothing pattern.
+                # Nudge it to actually invoke the tool or report the result.
+                tool_defs != [] and step_count < agent.max_steps_per_run - 1 and
+                  looks_like_intent_without_action?(final_text) ->
+                  Logger.warning("Agent #{agent.id} response looks like intent preamble without tool call, retrying")
+
+                  nudge = %{"role" => "user", "content" => [
+                    %{"type" => "text", "text" => "[System: You described what you intend to do but didn't actually call any tools. Either call the appropriate tool now, or if you cannot, tell the user the final result. Do NOT repeat your preamble.]"}
+                  ]}
+
+                  retry_messages = messages ++ [
+                    %{"role" => "assistant", "content" => [%{"type" => "text", "text" => final_text}]},
+                    nudge
+                  ]
+
+                  agentic_loop(state, run, retry_messages, tool_defs, system, step_count + 1, prev_tools, deadline, trigger, opts)
+
                 true ->
                   final_text = if final_text == "", do: "[Agent produced no response]", else: final_text
 
@@ -483,6 +501,21 @@ defmodule OneAgent.Runtime.AgentProcess do
     """
 
     agent.system_prompt <> context_section <> memory_section <> schedule_section <> goals_section
+  end
+
+  # Detects responses that look like the LLM is narrating an intent to act
+  # (e.g. "Now executing the trade:") without actually calling a tool.
+  defp looks_like_intent_without_action?(text) do
+    trimmed = String.trim(text)
+
+    # Trailing colon is the strongest signal — "Let me do X:" or "Now calling Y:"
+    ends_with_colon = String.ends_with?(trimmed, ":")
+
+    # Also catch "I'll now …" / "Let me …" as final line without colon
+    last_line = trimmed |> String.split("\n") |> List.last() |> String.trim()
+    intent_pattern = Regex.match?(~r/^(Now |Let me |I('ll| will) (now )?)/i, last_line)
+
+    ends_with_colon or intent_pattern
   end
 
   # Extracts the most recent tool_result content from the message history

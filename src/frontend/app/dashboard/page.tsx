@@ -14,6 +14,20 @@ import { MeshGradient } from "../components/MeshGradient";
 import { TopBar } from "../components/TopBar";
 import { applyFocus, removeFocus } from "../components/FocusHandlers";
 
+function timeAgo(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diff = now - then;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
 /* ================================================================== */
 /*  Dashboard page                                                     */
 /* ================================================================== */
@@ -133,6 +147,31 @@ function DashboardContent() {
 
                   {agent.description && (
                     <p style={{ fontSize: "0.85rem", color: C.muted, lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{agent.description}</p>
+                  )}
+
+                  {/* Last run activity */}
+                  {agent.last_run ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.78rem" }}>
+                      <span style={{
+                        width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                        background: agent.last_run.status === "completed" ? C.glow
+                          : agent.last_run.status === "failed" ? C.danger
+                          : agent.last_run.status === "running" ? "#FFD166"
+                          : C.muted,
+                      }} />
+                      <span style={{ color: C.muted }}>
+                        {timeAgo(agent.last_run.inserted_at)}
+                      </span>
+                      <span style={{
+                        padding: "0.1rem 0.4rem", borderRadius: 4,
+                        background: "rgba(255,255,255,0.04)", color: C.faint,
+                        fontSize: "0.72rem", letterSpacing: "0.03em",
+                      }}>
+                        {agent.last_run.trigger}
+                      </span>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: "0.75rem", color: C.faint, fontStyle: "italic", margin: 0 }}>No runs yet</p>
                   )}
 
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.78rem", color: C.faint }}>
