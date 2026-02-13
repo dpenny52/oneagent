@@ -102,6 +102,11 @@ export function ChatTab({
   const prevMessageCountRef = useRef(messages.length);
   const userSentRef = useRef(false);
 
+  // Scroll to bottom when tab first opens
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "instant" });
+  }, []);
+
   // Track when user sends a message (sending transitions from false → true)
   useEffect(() => {
     if (sending) userSentRef.current = true;
