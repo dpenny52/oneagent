@@ -155,7 +155,59 @@ defmodule OneAgent.LLM.OpenAI do
         }
       end)
 
-    text_blocks ++ tool_blocks
+    # Fallback: some models (e.g. Zhipu GLM) emit tool calls as XML text
+    # instead of using the native function calling API
+    if tool_blocks == [] do
+      case text_blocks do
+        [%{type: :text, text: text}] -> maybe_extract_xml_tool_calls(text)
+        _ -> text_blocks
+      end
+    else
+      text_blocks ++ tool_blocks
+    end
+  end
+
+  @xml_tool_call_regex ~r/<tool_call>(.*?)<\/tool_call>/s
+
+  defp maybe_extract_xml_tool_calls(text) do
+    if Regex.match?(@xml_tool_call_regex, text) do
+      # Text before the first <tool_call> is kept as a text block
+      [pre_text | _] = String.split(text, "<tool_call>", parts: 2)
+      pre_text = String.trim(pre_text)
+
+      text_blocks = if pre_text != "", do: [%{type: :text, text: pre_text}], else: []
+
+      tool_blocks =
+        Regex.scan(@xml_tool_call_regex, text)
+        |> Enum.map(fn [_full, inner] -> parse_xml_tool_call(inner) end)
+
+      text_blocks ++ tool_blocks
+    else
+      [%{type: :text, text: text}]
+    end
+  end
+
+  defp parse_xml_tool_call(inner) do
+    tool_name =
+      case String.split(inner, "<arg_key>", parts: 2) do
+        [name | _] -> String.trim(name)
+        _ -> "unknown"
+      end
+
+    keys = Regex.scan(~r/<arg_key>(.*?)<\/arg_key>/s, inner) |> Enum.map(fn [_, k] -> k end)
+    values = Regex.scan(~r/<arg_value>(.*?)<\/arg_value>/s, inner) |> Enum.map(fn [_, v] -> maybe_json_decode(v) end)
+
+    input = Enum.zip(keys, values) |> Map.new()
+    id = "xmltc_#{Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)}"
+
+    %{type: :tool_use, id: id, name: tool_name, input: input}
+  end
+
+  defp maybe_json_decode(value) do
+    case Jason.decode(value) do
+      {:ok, decoded} -> decoded
+      {:error, _} -> value
+    end
   end
 
   defp maybe_put_tools(body, []), do: body
