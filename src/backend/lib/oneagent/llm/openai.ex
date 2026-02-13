@@ -37,7 +37,7 @@ defmodule OneAgent.LLM.OpenAI do
     url = Keyword.get(opts, :base_url, @api_url)
     error_prefix = Keyword.get(opts, :error_prefix, "OpenAI")
 
-    case Req.post(url, [json: body, headers: headers, receive_timeout: recv_timeout, retry: :transient, max_retries: max_retries] ++ extra) do
+    case Req.post(url, [json: body, headers: headers, receive_timeout: recv_timeout, connect_options: [timeout: 30_000], retry: :transient, max_retries: max_retries] ++ extra) do
       {:ok, %Req.Response{status: 200, body: resp}} ->
         {:ok, parse_response(resp)}
 

@@ -32,8 +32,8 @@ defmodule OneAgent.LLM.Zhipu do
       {:error, msg} = error when is_binary(msg) ->
         fallback = Map.get(@fallback_models, model)
 
-        if fallback && rate_limited?(msg) do
-          Logger.warning("Zhipu rate limited on #{model}, falling back to #{fallback}")
+        if fallback && should_fallback?(msg) do
+          Logger.warning("Zhipu #{model} failed (#{String.slice(msg, 0..80)}), falling back to #{fallback}")
           OneAgent.LLM.OpenAI.chat(api_key, fallback, messages, opts)
         else
           error
@@ -41,8 +41,12 @@ defmodule OneAgent.LLM.Zhipu do
     end
   end
 
-  defp rate_limited?(msg) do
+  defp should_fallback?(msg) do
     downcased = String.downcase(msg)
-    String.contains?(downcased, "429") or String.contains?(downcased, "rate limit")
+
+    String.contains?(downcased, "429") or
+      String.contains?(downcased, "rate limit") or
+      String.contains?(downcased, "transporterror") or
+      String.contains?(downcased, "timeout")
   end
 end
