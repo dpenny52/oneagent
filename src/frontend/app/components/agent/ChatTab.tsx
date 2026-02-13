@@ -98,8 +98,33 @@ export function ChatTab({
   onClearHistory: () => void;
 }) {
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef(messages.length);
+  const userSentRef = useRef(false);
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, sending]);
+  // Track when user sends a message (sending transitions from false → true)
+  useEffect(() => {
+    if (sending) userSentRef.current = true;
+  }, [sending]);
+
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (!container) return;
+
+    const isNewMessage = messages.length > prevMessageCountRef.current;
+    const wasUserSend = userSentRef.current;
+    prevMessageCountRef.current = messages.length;
+
+    // Auto-scroll only if: user just sent a message, OR user was already near the bottom
+    if (wasUserSend) {
+      userSentRef.current = false;
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    } else if (isNewMessage) {
+      const threshold = 80;
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+      if (isNearBottom) chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, sending]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -110,7 +135,7 @@ export function ChatTab({
       )}
 
       {/* Messages */}
-      <div style={{ ...glassCard(), padding: "1.5rem", minHeight: 350, maxHeight: 500, overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div ref={chatContainerRef} style={{ ...glassCard(), padding: "1.5rem", minHeight: 350, maxHeight: 500, overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
         {messages.length === 0 && !sending && (
           <div style={{ textAlign: "center", padding: "3rem 1rem", color: C.faint, fontSize: "0.9rem" }}>No messages yet. Send a message to start.</div>
         )}
